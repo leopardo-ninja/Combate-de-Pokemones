@@ -412,10 +412,12 @@ def main():
 
             elif evento.type == pygame.KEYDOWN:
                 if estado_app == "menu_principal":
-                    if evento.key == pygame.K_DOWN:
-                        seleccion_idx = (seleccion_idx + 1) % 3
+                    if evento.key == pygame.K_ESCAPE:
+                        ejecutando = False
+                    elif evento.key == pygame.K_DOWN:
+                        seleccion_idx = (seleccion_idx + 1) % 4
                     elif evento.key == pygame.K_UP:
-                        seleccion_idx = (seleccion_idx - 1) % 3
+                        seleccion_idx = (seleccion_idx - 1) % 4
                     elif evento.key == pygame.K_RETURN:
                         if seleccion_idx == 0:
                             modo_juego = "1v1"
@@ -435,6 +437,8 @@ def main():
                             lib_poke_idx = 0
                             lib_detalle = False
                             scroll_offset_lib = 0
+                        elif seleccion_idx == 3:
+                            ejecutando = False
 
                 elif estado_app == "seleccion":
                     limite = len(LISTA_PLANA_POKES)
@@ -574,7 +578,7 @@ def main():
             titulo = FUENTE_GRANDE.render("POKÉMON AÑIL - DUELO", True, BLANCO)
             pantalla.blit(titulo, (720, 300))
 
-            opciones = ["Modo 1v1", "Modo 3v3", "Biblioteca de Pokémon"]
+            opciones = ["Modo 1v1", "Modo 3v3", "Biblioteca de Pokémon", "Salir"]
             for idx, op in enumerate(opciones):
                 color_op = (255, 230, 50) if seleccion_idx == idx else BLANCO
                 pref = "▶ " if seleccion_idx == idx else "   "
