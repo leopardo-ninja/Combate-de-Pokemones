@@ -32,6 +32,26 @@ def obtener_sprite(nombre, vista, tamaño, color_respaldo=None):
     return _CACHE_SPRITES[clave]
 
 
+_HOJA_FONDOS = None
+_CACHE_FONDOS = {}
+
+
+def obtener_fondo(indice):
+    #Recorta un fondo de la hoja (3 columnas x 4 filas), lo agranda 8 veces y lo sube 72 px
+    global _HOJA_FONDOS
+    if indice not in _CACHE_FONDOS:
+        if _HOJA_FONDOS is None:
+            _HOJA_FONDOS = pygame.image.load("assets/fondos/fondos.png").convert_alpha()
+        fila, col = divmod(indice, 3)
+        recorte = _HOJA_FONDOS.subsurface((col * 240, fila * 112, 240, 111))
+        grande = pygame.transform.scale(recorte, (1920, 888))
+        fondo = pygame.Surface((ANCHO_VIRTUAL, ALTO_VIRTUAL))
+        fondo.fill(tuple(recorte.get_at((239, 110)))[:3])   # el color de la franja inferior rellena lo que sobra abajo
+        fondo.blit(grande, (0, -72))
+        _CACHE_FONDOS[indice] = fondo
+    return _CACHE_FONDOS[indice]
+
+
 def pos_virtual(pos):
     #Posicion del mouse
     return (int(pos[0] * ANCHO_VIRTUAL / ANCHO_REAL), int(pos[1] * ALTO_VIRTUAL / ALTO_REAL))
@@ -53,7 +73,7 @@ def separar_texto_en_lineas(texto, fuente, max_ancho):
 
 
 class Boton:
-    """Botón rectangular con texto; se resalta cuando está seleccionado."""
+    # Botón rectangular reactivo con texto
 
     def __init__(self, x, y, ancho, alto, texto):
         self.rect = pygame.Rect(x, y, ancho, alto)
@@ -80,6 +100,9 @@ TEMAS_TIPO_COMBATE = {
     "Tierra": {"fondo_top": (65, 45, 25), "fondo_bot": (30, 20, 10), "suelo_rival": (100, 75, 45), "suelo_jug": (125, 95, 55), "principal": (170, 120, 60)},
 }
 
+# Número de fondo (fila * 3 + columna, empezando en 0) para cada tipo
+FONDO_POR_TIPO = {"Planta": 0, "Agua": 3, "Tierra": 6, "Eléctrico": 7, "Fuego": 11}
+
 
 # ----------------- DIBUJAR PANTALLA DE COMBATE RESPONSIVA -----------------
 
@@ -105,6 +128,8 @@ class EscenaCombate:
         self.combate = combate
         self.flash = {"ia": 0, "jugador": 0}
         self.texto_flotante = {"ia": ("", 0), "jugador": ("", 0)}
+        self.seleccion = 0          # botón resaltado (índice en zonas_navegables)
+        self._contexto = None       # (turno, sub_menu) para reiniciar la selección al cambiar de menú
 
     def _procesar_eventos(self):
         for tipo, objetivo, cantidad in self.combate.eventos:
@@ -131,6 +156,53 @@ class EscenaCombate:
             txt = FUENTE_GRANDE.render(texto, True, (255, 80, 80))
             pantalla.blit(txt, (x, y_base - (45 - timer)))
 
+    def _sincronizar(self):
+        """Si cambió de menú, la selección vuelve al primer botón."""
+        contexto = (self.combate.turno, self.combate.sub_menu)
+        if contexto != self._contexto:
+            self._contexto = contexto
+            self.seleccion = 0
+
+    def zonas_navegables(self):
+        """Botones que se recorren con las flechas (VOLVER solo se pulsa con mouse; con teclado es ESC)."""
+        return [z for z in self.zonas_clic() if z[0] != "volver"]
+
+    def mover_seleccion(self, tecla):
+        """Mueve el botón resaltado con las flechas."""
+        self._sincronizar()
+        n = len(self.zonas_navegables())
+        if n <= 1:
+            return
+        c = self.combate
+        if c.turno == "jugador" and c.sub_menu == "luchar":
+            # Habilidades en cuadrícula 2x2: izquierda/derecha cambian de columna, arriba/abajo de fila
+            if tecla in (pygame.K_LEFT, pygame.K_RIGHT):
+                nuevo = self.seleccion ^ 1
+            else:
+                nuevo = (self.seleccion + 2) % 4
+            if nuevo < n:
+                self.seleccion = nuevo
+        else:
+            # Botones en una sola fila
+            paso = 1 if tecla in (pygame.K_RIGHT, pygame.K_DOWN) else -1
+            self.seleccion = (self.seleccion + paso) % n
+
+    def accion_seleccionada(self):
+        # Reactividad del bonton al hover
+        self._sincronizar()
+        zonas = self.zonas_navegables()
+        if 0 <= self.seleccion < len(zonas):
+            return zonas[self.seleccion][0]
+        return None
+
+    def seleccionar_en(self, pos_real):
+        """Resalta el botón que está bajo el mouse (si hay uno)."""
+        self._sincronizar()
+        pos = pos_virtual(pos_real)
+        for i, (_, rect) in enumerate(self.zonas_navegables()):
+            if rect.collidepoint(pos):
+                self.seleccion = i
+
     def _dibujar_boton_volver(self, pantalla):
         pygame.draw.rect(pantalla, GRIS_OSCURO, RECT_VOLVER, border_radius=12)
         pygame.draw.rect(pantalla, NEGRO, RECT_VOLVER, 3, border_radius=12)
@@ -138,7 +210,7 @@ class EscenaCombate:
         pantalla.blit(txt, txt.get_rect(center=RECT_VOLVER.center))
 
     def zonas_clic(self):
-        """Lista de (acción, rect) de lo que se puede pulsar en este momento."""
+        # Zonas interactuables
         c = self.combate
         if c.turno == "fin":
             return [("menu", RECT_MENU_FIN)]
@@ -164,27 +236,18 @@ class EscenaCombate:
 
     def dibujar(self, pantalla):
         self._procesar_eventos()
+        self._sincronizar()
         combate = self.combate
         tema = TEMAS_TIPO_COMBATE.get(combate.p_data["tipo"], TEMAS_TIPO_COMBATE["Fuego"])
-        sprite_ia = obtener_sprite(combate.i_nombre, "frente", (280, 280), (200, 50, 50))
-        sprite_jugador = obtener_sprite(combate.p_nombre, "espalda", (280, 280), (50, 100, 200))
+        sprite_ia = obtener_sprite(combate.i_nombre, "frente", (680, 680), (200, 50, 50)) #Pokemon rival tamano
+        sprite_jugador = obtener_sprite(combate.p_nombre, "espalda", (680, 680), (50, 100, 200)) #Pokemon aliado tamano
 
-        for y in range(720):
-            factor = y / 720.0
-            r = int(tema["fondo_top"][0] * (1 - factor) + tema["fondo_bot"][0] * factor)
-            g = int(tema["fondo_top"][1] * (1 - factor) + tema["fondo_bot"][1] * factor)
-            b = int(tema["fondo_top"][2] * (1 - factor) + tema["fondo_bot"][2] * factor)
-            pygame.draw.line(pantalla, (r, g, b), (0, y), (ANCHO_VIRTUAL, y))
+        pantalla.blit(obtener_fondo(FONDO_POR_TIPO.get(combate.p_data["tipo"], 0)), (0, 0))
 
-        pygame.draw.ellipse(pantalla, (20, 20, 25), (1150, 283, 460, 125))
-        pygame.draw.ellipse(pantalla, tema["suelo_rival"], (1140, 275, 480, 115))
-        pygame.draw.ellipse(pantalla, (20, 20, 25), (275, 743, 520, 155))
-        pygame.draw.ellipse(pantalla, tema["suelo_jug"], (265, 735, 540, 145))
-
-        self._dibujar_sprite(pantalla, sprite_ia, (1240, 100), "ia")
-        self._dibujar_sprite(pantalla, sprite_jugador, (380, 480), "jugador")
-        self._dibujar_texto_flotante(pantalla, "ia", 1360, 70)
-        self._dibujar_texto_flotante(pantalla, "jugador", 500, 450)
+        self._dibujar_sprite(pantalla, sprite_ia, (1050, 30), "ia") #Pokemon rival posicion
+        self._dibujar_sprite(pantalla, sprite_jugador, (300, 350), "jugador") #Pokemon aliado posicion
+        self._dibujar_texto_flotante(pantalla, "ia", 1360, 150)
+        self._dibujar_texto_flotante(pantalla, "jugador", 500, 470)
 
         pygame.draw.rect(pantalla, (20, 20, 30), (100, 80, 520, 110), border_radius=15)
         pygame.draw.rect(pantalla, GRIS_CLARO, (104, 84, 512, 102), border_radius=12)
@@ -203,25 +266,25 @@ class EscenaCombate:
             color_hp_i = ROJO_ALERTA
         pygame.draw.rect(pantalla, color_hp_i, (230, 145, max(0, ancho_hp_i), 18), border_radius=6)
 
-        pygame.draw.rect(pantalla, (20, 20, 30), (1296, 526, 524, 124), border_radius=15)
-        pygame.draw.rect(pantalla, GRIS_CLARO, (1300, 530, 516, 116), border_radius=12)
-        pygame.draw.rect(pantalla, BORDE_CAJA, (1300, 530, 516, 116), 3, border_radius=12)
+        pygame.draw.rect(pantalla, (20, 20, 30), (1296, 660, 524, 124), border_radius=15)
+        pygame.draw.rect(pantalla, GRIS_CLARO, (1300, 664, 516, 116), border_radius=12)
+        pygame.draw.rect(pantalla, BORDE_CAJA, (1300, 664, 516, 116), 3, border_radius=12)
         txt_jug = FUENTE.render(f"{combate.p_nombre.capitalize()}", True, NEGRO)
         txt_jug_lvl = FUENTE.render(f"Lv.70", True, NEGRO)
-        pantalla.blit(txt_jug, (1330, 550))
-        pantalla.blit(txt_jug_lvl, (1710, 550))
+        pantalla.blit(txt_jug, (1330, 684))
+        pantalla.blit(txt_jug_lvl, (1710, 684))
 
-        pygame.draw.rect(pantalla, GRIS_OSCURO, (1450, 600, 320, 18), border_radius=6)
+        pygame.draw.rect(pantalla, GRIS_OSCURO, (1450, 734, 320, 18), border_radius=6)
         ancho_hp_p = int(320 * (combate.p_hp / combate.p_hp_max))
         color_hp_p = VERDE_BOTON
         if combate.p_hp / combate.p_hp_max <= 0.5:
             color_hp_p = AMARILLO_ALERTA
         if combate.p_hp / combate.p_hp_max <= 0.2:
             color_hp_p = ROJO_ALERTA
-        pygame.draw.rect(pantalla, color_hp_p, (1450, 600, max(0, ancho_hp_p), 18), border_radius=6)
+        pygame.draw.rect(pantalla, color_hp_p, (1450, 734, max(0, ancho_hp_p), 18), border_radius=6)
 
         txt_hp_num = FUENTE_CHICA.render(f"{combate.p_hp} / {combate.p_hp_max}", True, NEGRO)
-        pantalla.blit(txt_hp_num, (1610, 630))
+        pantalla.blit(txt_hp_num, (1610, 764))
 
         pygame.draw.rect(pantalla, (20, 20, 30), (96, 796, 1728, 228), border_radius=16)
         pygame.draw.rect(pantalla, NEGRO, (100, 800, 1720, 220), border_radius=14)
@@ -267,17 +330,24 @@ class EscenaCombate:
             self._dibujar_boton_volver(pantalla)
 
         elif combate.turno == "fin":
-            txt_r = FUENTE_GRANDE.render("Presiona [R] para volver al Menú Principal", True, ROJO_BOTON)
+            txt_r = FUENTE_GRANDE.render("Presiona [ENTER] para volver al Menú Principal", True, ROJO_BOTON)
             pantalla.blit(txt_r, (140, 920))
             pygame.draw.rect(pantalla, AZUL_BOTON, RECT_MENU_FIN, border_radius=12)
             pygame.draw.rect(pantalla, NEGRO, RECT_MENU_FIN, 3, border_radius=12)
             txt_menu = FUENTE.render("VOLVER AL MENÚ", True, BLANCO)
             pantalla.blit(txt_menu, txt_menu.get_rect(center=RECT_MENU_FIN.center))
 
-        # Borde amarillo en el botón sobre el que está el mouse
+        if combate.turno == "jugador":
+            ayuda = FUENTE_CHICA.render("Flechas: mover  |  ENTER: elegir  |  ESC: volver", True, GRIS_OSCURO)
+            pantalla.blit(ayuda, (400, 960))
+
+        # Borde amarillo en el botón seleccionado (con flechas o con el mouse)
+        zonas = self.zonas_navegables()
+        if 0 <= self.seleccion < len(zonas):
+            pygame.draw.rect(pantalla, (255, 230, 50), zonas[self.seleccion][1], 4, border_radius=12)
         pos_mouse = pos_virtual(pygame.mouse.get_pos())
-        for _, rect in self.zonas_clic():
-            if rect.collidepoint(pos_mouse):
+        for accion, rect in self.zonas_clic():
+            if accion == "volver" and rect.collidepoint(pos_mouse):
                 pygame.draw.rect(pantalla, (255, 230, 50), rect, 4, border_radius=12)
 
 

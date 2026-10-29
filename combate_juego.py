@@ -9,29 +9,17 @@ from motor_combate import Combate
 from pokemons import SECCIONES_POKEMON, LISTA_PLANA_POKES
 
 
-def tecla_a_accion(tecla, combate):
-    """Traduce una tecla del combate a una acción (la misma que produce un clic)."""
-    if combate.turno == "jugador":
-        if combate.sub_menu == "principal":
-            if tecla in (pygame.K_1, pygame.K_l):
-                return "luchar"
-            if tecla == pygame.K_2:
-                return "cambiar"
-        elif combate.sub_menu == "luchar":
-            teclas = {pygame.K_1: 0, pygame.K_2: 1, pygame.K_3: 2, pygame.K_4: 3}
-            if tecla in teclas:
-                return ("habilidad", teclas[tecla])
-            if tecla == pygame.K_ESCAPE:
-                return "volver"
-        elif combate.sub_menu == "cambiar":
-            teclas = {pygame.K_1: 0, pygame.K_2: 1, pygame.K_3: 2}
-            if tecla in teclas and teclas[tecla] < len(combate.eq_jugador):
-                return ("pokemon", teclas[tecla])
-            if tecla == pygame.K_ESCAPE:
-                return "volver"
-    elif combate.turno == "fin":
-        if tecla == pygame.K_r:
-            return "menu"
+def tecla_a_accion(tecla, escena):
+    """Traduce una tecla del combate a una acción (la misma que produce un clic).
+
+    Las flechas solo mueven el botón resaltado; ENTER elige el resaltado; ESC vuelve.
+    """
+    if tecla in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
+        escena.mover_seleccion(tecla)
+    elif tecla == pygame.K_RETURN:
+        return escena.accion_seleccionada()
+    elif tecla == pygame.K_ESCAPE:
+        return "volver"
     return None
 
 
@@ -110,6 +98,9 @@ def main():
                         activar_opcion = True
 
             # --- Mouse en el combate ---
+            elif evento.type == pygame.MOUSEMOTION and estado_app == "combate":
+                escena_combate.seleccionar_en(evento.pos)
+
             elif evento.type == pygame.MOUSEBUTTONDOWN and estado_app == "combate":
                 if evento.button == 1:
                     accion_combate = escena_combate.accion_en(evento.pos)
@@ -168,7 +159,7 @@ def main():
                         estado_app = "combate"
 
                 elif estado_app == "combate":
-                    accion_combate = tecla_a_accion(evento.key, combate)
+                    accion_combate = tecla_a_accion(evento.key, escena_combate)
 
                 elif estado_app == "biblioteca":
                     tipo_actual = tipo_claves[lib_sec_idx]
