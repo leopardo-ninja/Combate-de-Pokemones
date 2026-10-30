@@ -9,6 +9,7 @@ from config import (
     COLORES_TIPO, FUENTE, FUENTE_CHICA, FUENTE_GRANDE,
 )
 from pokemons import SECCIONES_POKEMON, CATALOGO_POKEMONS, LISTA_PLANA_POKES
+from escenarios import ESCENARIOS
 
 
 # ----------------- UTILIDADES -----------------
@@ -100,8 +101,90 @@ TEMAS_TIPO_COMBATE = {
     "Tierra": {"fondo_top": (65, 45, 25), "fondo_bot": (30, 20, 10), "suelo_rival": (100, 75, 45), "suelo_jug": (125, 95, 55), "principal": (170, 120, 60)},
 }
 
-# Número de fondo (fila * 3 + columna, empezando en 0) para cada tipo
-FONDO_POR_TIPO = {"Planta": 0, "Agua": 3, "Tierra": 6, "Eléctrico": 7, "Fuego": 11}
+# ----------------- ESCENARIOS, BASES Y CAJAS DE VIDA -----------------
+# Posiciones del combate (coordenadas virtuales 1920x1080)
+
+POS_POKEMON_IA = (1030, 160)          # Posicion Pokemon IA
+POS_POKEMON_JUG = (300, 350)        # Posicion Pokemon Jugador
+BASE_IA_CENTRO = (1300, 500)        # Posicion Arena IA
+BASE_JUG_ARRIBA = (640, 700)        # Posicion Arena Jugador
+ESCALA_BASE_IA = 5
+ESCALA_BASE_JUG = 5
+
+# Cajas de vida (Jugador y Rival)
+ESCALA_CAJA = 1.5 #Dimesion
+BARRA_CAJA = {"rival": (93, 40, 211, 49), "jugador": (116, 40, 233, 49)} #Barra de vida
+POS_CAJA = {"rival": (600, 100), "jugador": (1200, 650)} #Posicion
+
+_CACHE_BASES = {}
+_CACHE_CAJAS = {}
+_CACHE_ESCENARIOS = {}
+_CACHE_VISTA_PREVIA = {}
+
+
+def obtener_base(lado, indice, escala):
+    #Carga una base (lado = "rival" o "jugador") y la agranda sin suavizar (pixel art)
+    clave = (lado, indice, escala)
+    if clave not in _CACHE_BASES:
+        ruta = f"assets/bases/{lado}_{indice:02d}.png"
+        if os.path.exists(ruta):
+            img = pygame.image.load(ruta).convert_alpha()
+            _CACHE_BASES[clave] = pygame.transform.scale(img, (int(img.get_width() * escala), int(img.get_height() * escala)))
+        else:
+            _CACHE_BASES[clave] = None
+    return _CACHE_BASES[clave]
+
+
+def obtener_caja(lado):
+    #Carga la caja de vida ("rival" o "jugador") ya escalada
+    if lado not in _CACHE_CAJAS:
+        ruta = f"assets/ui/caja_{lado}.png"
+        if os.path.exists(ruta):
+            img = pygame.image.load(ruta).convert_alpha()
+            _CACHE_CAJAS[lado] = pygame.transform.smoothscale(img, (int(img.get_width() * ESCALA_CAJA), int(img.get_height() * ESCALA_CAJA)))
+        else:
+            _CACHE_CAJAS[lado] = None
+    return _CACHE_CAJAS[lado]
+
+
+def obtener_fondo_escenario(indice):
+    #Fondo del escenario: usa fondos.png si el escenario tiene uno asignado; si no, un degradado
+    if indice not in _CACHE_ESCENARIOS:
+        esc = ESCENARIOS[indice]
+        fondo = None
+        if esc["fondo"] is not None and os.path.exists("assets/fondos/fondos.png"):
+            fondo = obtener_fondo(esc["fondo"])
+        if fondo is None:
+            fondo = pygame.Surface((ANCHO_VIRTUAL, ALTO_VIRTUAL))
+            arriba, abajo = esc["cielo"]
+            horizonte = 640
+            for y in range(horizonte):
+                t = y / horizonte
+                color = tuple(int(arriba[i] + (abajo[i] - arriba[i]) * t) for i in range(3))
+                pygame.draw.line(fondo, color, (0, y), (ANCHO_VIRTUAL, y))
+            pygame.draw.rect(fondo, esc["suelo"], (0, horizonte, ANCHO_VIRTUAL, ALTO_VIRTUAL - horizonte))
+        _CACHE_ESCENARIOS[indice] = fondo
+    return _CACHE_ESCENARIOS[indice]
+
+
+def dibujar_bases(pantalla, indice):
+    #Dibuja las dos bases (rival y jugador) del escenario sobre la superficie dada
+    base_ia = obtener_base("rival", indice, ESCALA_BASE_IA)
+    if base_ia:
+        pantalla.blit(base_ia, base_ia.get_rect(center=BASE_IA_CENTRO))
+    base_jug = obtener_base("jugador", indice, ESCALA_BASE_JUG)
+    if base_jug:
+        pantalla.blit(base_jug, base_jug.get_rect(midtop=BASE_JUG_ARRIBA))
+
+
+def obtener_vista_previa(indice, tamaño):
+    #Miniatura del escenario (fondo + bases) para la pantalla de la arena
+    clave = (indice, tamaño)
+    if clave not in _CACHE_VISTA_PREVIA:
+        escena = obtener_fondo_escenario(indice).copy()
+        dibujar_bases(escena, indice)
+        _CACHE_VISTA_PREVIA[clave] = pygame.transform.smoothscale(escena, tamaño)
+    return _CACHE_VISTA_PREVIA[clave]
 
 
 # ----------------- DIBUJAR PANTALLA DE COMBATE RESPONSIVA -----------------
@@ -112,6 +195,7 @@ RECT_LUCHAR = pygame.Rect(1200, 830, 280, 75)
 RECT_CAMBIAR = pygame.Rect(1510, 830, 280, 75)
 RECT_VOLVER = pygame.Rect(140, 940, 220, 55)
 RECT_MENU_FIN = pygame.Rect(1310, 830, 480, 75)
+OFFSET_NOMBRE = {"rival": (12, 11), "jugador": (36, 11)}    # Diferencia de posicion entre los nombres de los pokemons
 
 
 def rect_habilidad(idx):
@@ -124,8 +208,10 @@ def rect_pokemon(idx):
 # Dibuja el combate y maneja las animaciones
 class EscenaCombate:
     
-    def __init__(self, combate):
+    def __init__(self, combate, escenario=0):
         self.combate = combate
+        self.escenario = escenario  # índice en ESCENARIOS (fondo + bases)
+        self.hp_visible = {}        # quien -> (nombre, hp mostrado) para animar el vaciado de la barra
         self.flash = {"ia": 0, "jugador": 0}
         self.texto_flotante = {"ia": ("", 0), "jugador": ("", 0)}
         self.seleccion = 0          # botón resaltado (índice en zonas_navegables)
@@ -162,6 +248,62 @@ class EscenaCombate:
         if contexto != self._contexto:
             self._contexto = contexto
             self.seleccion = 0
+
+    def _hp_visible(self, quien, nombre, hp, hp_max):
+        """HP que se muestra en la barra: se acerca poco a poco al real para animar el daño."""
+        guardado = self.hp_visible.get(quien)
+        if guardado is None or guardado[0] != nombre:
+            valor = hp
+        else:
+            valor = guardado[1]
+            paso = max(0.5, hp_max / 90)
+            if valor > hp:
+                valor = max(hp, valor - paso)
+            elif valor < hp:
+                valor = min(hp, valor + paso)
+        self.hp_visible[quien] = (nombre, valor)
+        return valor
+
+    # Configuracion de la caja de vida Jugador y IA
+    def _dibujar_caja_vida(self, pantalla, lado, nombre, hp, hp_max, mostrar_numeros):
+        caja = obtener_caja(lado)
+        quien = "ia" if lado == "rival" else "jugador"
+        px, py = POS_CAJA[lado]
+        if caja is None:
+            return
+        pantalla.blit(caja, (px, py))
+
+        # Nombre y nivel en la parte superior de la caja
+        ox, oy = OFFSET_NOMBRE[lado]
+        txt_nombre = FUENTE.render(nombre.capitalize(), True, NEGRO)
+        pantalla.blit(txt_nombre, (px + int(ox * ESCALA_CAJA), py + int(oy * ESCALA_CAJA)))
+        #txt_lvl = FUENTE.render("Lv.70", True, NEGRO)
+        #pantalla.blit(txt_lvl, (px + caja.get_width() - txt_lvl.get_width() - int(26 * ESCALA_CAJA), py + int(5 * ESCALA_CAJA)))
+
+        # Barra de vida (se pinta sobre la pista blanca de la imagen)
+        bx0, by0, bx1, by1 = BARRA_CAJA[lado]
+        rx = px + int(bx0 * ESCALA_CAJA)
+        ry = py + int(by0 * ESCALA_CAJA)
+        rw = int((bx1 - bx0 + 1) * ESCALA_CAJA)
+        rh = int((by1 - by0 + 1) * ESCALA_CAJA)
+        visible = self._hp_visible(quien, nombre, hp, hp_max)
+        proporcion = max(0.0, min(1.0, visible / hp_max))
+        if proporcion > 0.5:
+            color, brillo = (72, 200, 112), (150, 235, 170)
+        elif proporcion > 0.2:
+            color, brillo = (240, 200, 48), (255, 235, 130)
+        else:
+            color, brillo = (232, 64, 48), (255, 140, 120)
+        ancho = int(rw * proporcion)
+        if ancho > 0:
+            pygame.draw.rect(pantalla, color, (rx, ry, ancho, rh), border_radius=4)
+            pygame.draw.rect(pantalla, brillo, (rx + 2, ry + 2, max(0, ancho - 4), max(1, rh // 3)), border_radius=3)
+
+        if mostrar_numeros:
+            txt_hp = FUENTE_CHICA.render(f"{hp} / {hp_max}", True, NEGRO)
+            x_num = px + int((bx0 + 120) * ESCALA_CAJA)   # borde derecho del texto
+            y_num = py + int((by0 + 20) * ESCALA_CAJA)    # borde superior del texto
+            pantalla.blit(txt_hp, (x_num - txt_hp.get_width(), y_num))
 
     def zonas_navegables(self):
         """Botones que se recorren con las flechas (VOLVER solo se pulsa con mouse; con teclado es ESC)."""
@@ -239,52 +381,19 @@ class EscenaCombate:
         self._sincronizar()
         combate = self.combate
         tema = TEMAS_TIPO_COMBATE.get(combate.p_data["tipo"], TEMAS_TIPO_COMBATE["Fuego"])
-        sprite_ia = obtener_sprite(combate.i_nombre, "frente", (680, 680), (200, 50, 50)) #Pokemon rival tamano
-        sprite_jugador = obtener_sprite(combate.p_nombre, "espalda", (680, 680), (50, 100, 200)) #Pokemon aliado tamano
+        pokemon_ia = obtener_sprite(combate.i_nombre, "frente", (500, 500), (200, 50, 50))           #Pokemon rival tamano
+        pokemon_jugador = obtener_sprite(combate.p_nombre, "espalda", (680, 680), (50, 100, 200))    #Pokemon aliado tamano
 
-        pantalla.blit(obtener_fondo(FONDO_POR_TIPO.get(combate.p_data["tipo"], 0)), (0, 0))
+        pantalla.blit(obtener_fondo_escenario(self.escenario), (0, 0))
+        dibujar_bases(pantalla, self.escenario)
 
-        self._dibujar_sprite(pantalla, sprite_ia, (1050, 30), "ia") #Pokemon rival posicion
-        self._dibujar_sprite(pantalla, sprite_jugador, (300, 350), "jugador") #Pokemon aliado posicion
+        self._dibujar_sprite(pantalla, pokemon_ia, POS_POKEMON_IA, "ia") #Pokemon rival posicion
+        self._dibujar_sprite(pantalla, pokemon_jugador, POS_POKEMON_JUG, "jugador") #Pokemon aliado posicion
         self._dibujar_texto_flotante(pantalla, "ia", 1360, 150)
         self._dibujar_texto_flotante(pantalla, "jugador", 500, 470)
 
-        pygame.draw.rect(pantalla, (20, 20, 30), (100, 80, 520, 110), border_radius=15)
-        pygame.draw.rect(pantalla, GRIS_CLARO, (104, 84, 512, 102), border_radius=12)
-        pygame.draw.rect(pantalla, BORDE_CAJA, (104, 84, 512, 102), 3, border_radius=12)
-        txt_ia = FUENTE.render(f"{combate.i_nombre.capitalize()}", True, NEGRO)
-        txt_ia_lvl = FUENTE.render(f"Lv.70", True, NEGRO)
-        pantalla.blit(txt_ia, (130, 100))
-        pantalla.blit(txt_ia_lvl, (510, 100))
-
-        pygame.draw.rect(pantalla, GRIS_OSCURO, (230, 145, 340, 18), border_radius=6)
-        ancho_hp_i = int(340 * (combate.i_hp / combate.i_hp_max))
-        color_hp_i = VERDE_BOTON
-        if combate.i_hp / combate.i_hp_max <= 0.5:
-            color_hp_i = AMARILLO_ALERTA
-        if combate.i_hp / combate.i_hp_max <= 0.2:
-            color_hp_i = ROJO_ALERTA
-        pygame.draw.rect(pantalla, color_hp_i, (230, 145, max(0, ancho_hp_i), 18), border_radius=6)
-
-        pygame.draw.rect(pantalla, (20, 20, 30), (1296, 660, 524, 124), border_radius=15)
-        pygame.draw.rect(pantalla, GRIS_CLARO, (1300, 664, 516, 116), border_radius=12)
-        pygame.draw.rect(pantalla, BORDE_CAJA, (1300, 664, 516, 116), 3, border_radius=12)
-        txt_jug = FUENTE.render(f"{combate.p_nombre.capitalize()}", True, NEGRO)
-        txt_jug_lvl = FUENTE.render(f"Lv.70", True, NEGRO)
-        pantalla.blit(txt_jug, (1330, 684))
-        pantalla.blit(txt_jug_lvl, (1710, 684))
-
-        pygame.draw.rect(pantalla, GRIS_OSCURO, (1450, 734, 320, 18), border_radius=6)
-        ancho_hp_p = int(320 * (combate.p_hp / combate.p_hp_max))
-        color_hp_p = VERDE_BOTON
-        if combate.p_hp / combate.p_hp_max <= 0.5:
-            color_hp_p = AMARILLO_ALERTA
-        if combate.p_hp / combate.p_hp_max <= 0.2:
-            color_hp_p = ROJO_ALERTA
-        pygame.draw.rect(pantalla, color_hp_p, (1450, 734, max(0, ancho_hp_p), 18), border_radius=6)
-
-        txt_hp_num = FUENTE_CHICA.render(f"{combate.p_hp} / {combate.p_hp_max}", True, NEGRO)
-        pantalla.blit(txt_hp_num, (1610, 764))
+        self._dibujar_caja_vida(pantalla, "rival", combate.i_nombre, combate.i_hp, combate.i_hp_max, False)
+        self._dibujar_caja_vida(pantalla, "jugador", combate.p_nombre, combate.p_hp, combate.p_hp_max, True)
 
         pygame.draw.rect(pantalla, (20, 20, 30), (96, 796, 1728, 228), border_radius=16)
         pygame.draw.rect(pantalla, NEGRO, (100, 800, 1720, 220), border_radius=14)
@@ -349,6 +458,134 @@ class EscenaCombate:
         for accion, rect in self.zonas_clic():
             if accion == "volver" and rect.collidepoint(pos_mouse):
                 pygame.draw.rect(pantalla, (255, 230, 50), rect, 4, border_radius=12)
+
+
+# ----------------- MODO ARENA: formato + escenario -----------------
+COLUMNAS_ARENA = 6
+CELDA_ARENA = (215, 150)
+ORIGEN_ARENA = (60, 220)
+RECT_FORMATOS = [pygame.Rect(60, 110, 300, 70), pygame.Rect(380, 110, 300, 70)]
+FORMATOS = ["1v1", "3v3"]
+TAM_VISTA_PREVIA = (480, 270)
+POS_VISTA_PREVIA = (1380, 220)
+
+
+def rect_celda_arena(idx):
+    fila, col = divmod(idx, COLUMNAS_ARENA)
+    return pygame.Rect(ORIGEN_ARENA[0] + col * CELDA_ARENA[0], ORIGEN_ARENA[1] + fila * CELDA_ARENA[1],
+                       CELDA_ARENA[0] - 10, CELDA_ARENA[1] - 10)
+
+
+class EscenaArena:
+    """Pantalla del modo Arena: se elige el formato (1v1 / 3v3) y el escenario."""
+
+    def __init__(self):
+        self.formato = 0          # índice en FORMATOS
+        self.escenario = 0        # índice en ESCENARIOS
+        self.foco = "grid"        # "formato" o "grid": dónde están las flechas
+
+    @property
+    def modo(self):
+        return FORMATOS[self.formato]
+
+    def mover(self, tecla):
+        n = len(ESCENARIOS)
+        if self.foco == "formato":
+            if tecla == pygame.K_LEFT:
+                self.formato = 0
+            elif tecla == pygame.K_RIGHT:
+                self.formato = 1
+            elif tecla == pygame.K_DOWN:
+                self.foco = "grid"
+            return
+        fila, col = divmod(self.escenario, COLUMNAS_ARENA)
+        if tecla == pygame.K_LEFT and col > 0:
+            self.escenario -= 1
+        elif tecla == pygame.K_RIGHT and self.escenario + 1 < n and col < COLUMNAS_ARENA - 1:
+            self.escenario += 1
+        elif tecla == pygame.K_DOWN:
+            self.escenario = min(self.escenario + COLUMNAS_ARENA, n - 1)
+        elif tecla == pygame.K_UP:
+            if fila == 0:
+                self.foco = "formato"
+            else:
+                self.escenario -= COLUMNAS_ARENA
+
+    def elegir(self):
+        """ENTER: en el formato baja a los escenarios; en un escenario continúa. Devuelve 'continuar' o None."""
+        if self.foco == "formato":
+            self.foco = "grid"
+            return None
+        return "continuar"
+
+    def pasar_mouse(self, pos_real):
+        pos = pos_virtual(pos_real)
+        for i, r in enumerate(RECT_FORMATOS):
+            if r.collidepoint(pos):
+                self.foco = "formato"
+                self.formato = i
+                return
+        for i in range(len(ESCENARIOS)):
+            if rect_celda_arena(i).collidepoint(pos):
+                self.foco = "grid"
+                self.escenario = i
+                return
+
+    def clic(self, pos_real):
+        pos = pos_virtual(pos_real)
+        for i, r in enumerate(RECT_FORMATOS):
+            if r.collidepoint(pos):
+                self.foco = "formato"
+                self.formato = i
+                return None
+        for i in range(len(ESCENARIOS)):
+            if rect_celda_arena(i).collidepoint(pos):
+                self.foco = "grid"
+                self.escenario = i
+                return "continuar"
+        return None
+
+    def dibujar(self, pantalla):
+        pantalla.fill((25, 28, 40))
+        pantalla.blit(FUENTE_GRANDE.render("MODO ARENA", True, BLANCO), (60, 30))
+
+        # Formato
+        for i, r in enumerate(RECT_FORMATOS):
+            activo = (i == self.formato)
+            pygame.draw.rect(pantalla, VERDE_BOTON if activo else (45, 52, 75), r, border_radius=12)
+            pygame.draw.rect(pantalla, BLANCO if activo else (90, 105, 140), r, 3, border_radius=12)
+            etiqueta = "1 vs 1" if i == 0 else "3 vs 3"
+            txt = FUENTE_GRANDE.render(etiqueta, True, BLANCO)
+            pantalla.blit(txt, txt.get_rect(center=r.center))
+            if self.foco == "formato" and activo:
+                pygame.draw.rect(pantalla, (255, 230, 50), r, 5, border_radius=12)
+
+        # Cuadrícula de escenarios
+        for i, esc in enumerate(ESCENARIOS):
+            r = rect_celda_arena(i)
+            elegido = (i == self.escenario)
+            pygame.draw.rect(pantalla, (55, 65, 100) if elegido else (35, 42, 60), r, border_radius=12)
+            pygame.draw.rect(pantalla, (255, 230, 50) if (elegido and self.foco == "grid") else ((130, 150, 200) if elegido else (70, 85, 120)),
+                             r, 4 if elegido else 2, border_radius=12)
+            base = obtener_base("rival", i, 1.5)
+            if base:
+                pantalla.blit(base, base.get_rect(center=(r.centerx, r.y + 62)))
+            txt = FUENTE_CHICA.render(esc["nombre"], True, BLANCO)
+            pantalla.blit(txt, txt.get_rect(center=(r.centerx, r.bottom - 22)))
+
+        # Vista previa del escenario elegido
+        vx, vy = POS_VISTA_PREVIA
+        pygame.draw.rect(pantalla, (40, 45, 65), (vx - 20, vy - 20, TAM_VISTA_PREVIA[0] + 40, 460), border_radius=15)
+        pygame.draw.rect(pantalla, AZUL_DS, (vx - 20, vy - 20, TAM_VISTA_PREVIA[0] + 40, 460), 4, border_radius=15)
+        pantalla.blit(obtener_vista_previa(self.escenario, TAM_VISTA_PREVIA), (vx, vy))
+        pygame.draw.rect(pantalla, NEGRO, (vx, vy, TAM_VISTA_PREVIA[0], TAM_VISTA_PREVIA[1]), 3)
+        nombre = FUENTE_GRANDE.render(ESCENARIOS[self.escenario]["nombre"], True, (255, 230, 50))
+        pantalla.blit(nombre, nombre.get_rect(center=(vx + TAM_VISTA_PREVIA[0] // 2, vy + TAM_VISTA_PREVIA[1] + 50)))
+        modo = FUENTE.render(f"Formato: {self.modo}", True, BLANCO)
+        pantalla.blit(modo, modo.get_rect(center=(vx + TAM_VISTA_PREVIA[0] // 2, vy + TAM_VISTA_PREVIA[1] + 100)))
+
+        ayuda = FUENTE.render("Flechas: mover  |  ENTER / clic: elegir escenario  |  ESC: volver", True, (180, 190, 210))
+        pantalla.blit(ayuda, (60, 1020))
 
 
 # ----------------- PANTALLAS -----------------

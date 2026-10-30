@@ -1,0 +1,25 @@
+# ----------------- ESCENARIOS DEL MODO ARENA -----------------
+
+ESCENARIOS = [
+    {"nombre": "Pradera",           "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Sendero arenoso",   "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Glaciar",           "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Cueva rocosa",      "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Ventisca",          "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Salón gris",        "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Desierto",          "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Tierra ondulada",   "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Cueva oscura",      "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Oasis",             "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Arena dorada",      "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Estadio azul",      "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Estadio turquesa",  "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Estadio rojo",      "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Estadio violeta",   "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Volcán",            "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Llanura amarilla",  "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Laguna turquesa",   "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Jardín rosa",       "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Esmeralda",         "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+    {"nombre": "Cristal",           "fondo": None, "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
+]

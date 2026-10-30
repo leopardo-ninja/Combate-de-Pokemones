@@ -55,6 +55,8 @@ def main():
 
     estado_app = "menu_principal"
     modo_juego = "1v1"
+    escenario_sel = 0
+    escena_arena = ui.EscenaArena()
 
     seleccion_idx = 0
     scroll_offset_sel = 0
@@ -73,7 +75,7 @@ def main():
 
     tipo_claves = list(SECCIONES_POKEMON.keys())
 
-    textos_menu = ["Modo 1v1", "Modo 3v3", "Biblioteca de Pokémon", "Salir"]
+    textos_menu = ["Modo Arena", "Biblioteca de Pokémon", "Salir"]
     botones_menu = [ui.Boton(710, 430 + i * 90, 500, 70, t) for i, t in enumerate(textos_menu)]
 
     while ejecutando:
@@ -97,6 +99,23 @@ def main():
                         seleccion_idx = i
                         activar_opcion = True
 
+            # --- Mouse en la arena ---
+            elif evento.type == pygame.MOUSEMOTION and estado_app == "arena":
+                escena_arena.pasar_mouse(evento.pos)
+
+            elif evento.type == pygame.MOUSEBUTTONDOWN and estado_app == "arena":
+                if evento.button == 1:
+                    if escena_arena.clic(evento.pos) == "continuar":
+                        modo_juego = escena_arena.modo
+                        escenario_sel = escena_arena.escenario
+                        estado_app = "seleccion"
+                        seleccion_idx = 0
+                        scroll_offset_sel = 0
+                        equipo_seleccionado = []
+                elif evento.button == 3:
+                    estado_app = "menu_principal"
+                    seleccion_idx = 0
+
             # --- Mouse en el combate ---
             elif evento.type == pygame.MOUSEMOTION and estado_app == "combate":
                 escena_combate.seleccionar_en(evento.pos)
@@ -119,9 +138,26 @@ def main():
                     elif evento.key == pygame.K_ESCAPE:
                         ejecutando = False
 
+                elif estado_app == "arena":
+                    if evento.key == pygame.K_ESCAPE:
+                        estado_app = "menu_principal"
+                        seleccion_idx = 0
+                    elif evento.key == pygame.K_RETURN:
+                        if escena_arena.elegir() == "continuar":
+                            modo_juego = escena_arena.modo
+                            escenario_sel = escena_arena.escenario
+                            estado_app = "seleccion"
+                            seleccion_idx = 0
+                            scroll_offset_sel = 0
+                            equipo_seleccionado = []
+                    else:
+                        escena_arena.mover(evento.key)
+
                 elif estado_app == "seleccion":
                     limite = len(LISTA_PLANA_POKES)
-                    if evento.key == pygame.K_DOWN:
+                    if evento.key == pygame.K_ESCAPE:
+                        estado_app = "arena"
+                    elif evento.key == pygame.K_DOWN:
                         seleccion_idx = (seleccion_idx + 1) % limite
                     elif evento.key == pygame.K_UP:
                         seleccion_idx = (seleccion_idx - 1) % limite
@@ -155,7 +191,7 @@ def main():
                 elif estado_app == "estadisticas":
                     if evento.key == pygame.K_RETURN or evento.key == pygame.K_SPACE:
                         combate = Combate(equipo_seleccionado, modo_juego)
-                        escena_combate = ui.EscenaCombate(combate)
+                        escena_combate = ui.EscenaCombate(combate, escenario_sel)
                         estado_app = "combate"
 
                 elif estado_app == "combate":
@@ -228,29 +264,22 @@ def main():
         # --- Seleccion Menu ---
         if activar_opcion and estado_app == "menu_principal":
             if seleccion_idx == 0:
-                modo_juego = "1v1"
-                estado_app = "seleccion"
-                seleccion_idx = 0
-                scroll_offset_sel = 0
-                equipo_seleccionado = []
+                estado_app = "arena"
             elif seleccion_idx == 1:
-                modo_juego = "3v3"
-                estado_app = "seleccion"
-                seleccion_idx = 0
-                scroll_offset_sel = 0
-                equipo_seleccionado = []
-            elif seleccion_idx == 2:
                 estado_app = "biblioteca"
                 lib_sec_idx = 0
                 lib_poke_idx = 0
                 lib_detalle = False
                 scroll_offset_lib = 0
-            elif seleccion_idx == 3:
+            elif seleccion_idx == 2:
                 ejecutando = False
 
         # ================= RENDERIZADO VISUAL RESPONSIVO =================
         if estado_app == "menu_principal":
             ui.dibujar_menu_principal(pantalla, botones_menu, seleccion_idx)
+
+        elif estado_app == "arena":
+            escena_arena.dibujar(pantalla)
 
         elif estado_app == "seleccion":
             ui.dibujar_seleccion(pantalla, equipo_seleccionado, seleccion_idx, scroll_offset_sel, modo_juego)

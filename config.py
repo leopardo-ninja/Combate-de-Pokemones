@@ -42,6 +42,7 @@ COLORES_TIPO = {
 }
 
 # Fuentes Escaladas
-FUENTE = pygame.font.SysFont("Verdana", 26, bold=True)
-FUENTE_CHICA = pygame.font.SysFont("Verdana", 20, bold=True)
-FUENTE_GRANDE = pygame.font.SysFont("Verdana", 38, bold=True)
+RUTA_FUENTE = "assets/fuentes/Comfortaa-Bold.ttf"
+FUENTE = pygame.font.Font(RUTA_FUENTE, 26)
+FUENTE_CHICA = pygame.font.Font(RUTA_FUENTE, 20)
+FUENTE_GRANDE = pygame.font.Font(RUTA_FUENTE, 38)
