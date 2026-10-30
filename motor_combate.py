@@ -22,18 +22,41 @@ def calcular_multiplicador(tipo_ataque, tipo_defensor):
 
 
 # ----------------- CLASE DE COMBATE -----------------
-class Combate:
-    def __init__(self, equipo_jugador, modo):
-        self.modo = modo
-        self.eq_jugador = list(equipo_jugador)
-        self.idx_activo_j = 0
+CURACION_POCION = 50
 
-        pool_disponible = [p for p in LISTA_PLANA_POKES if p not in self.eq_jugador]
-        self.eq_ia = random.sample(pool_disponible, len(self.eq_jugador))
+
+class Combate:
+    def __init__(self, equipo_jugador, modo, equipo_rival=None, hp_jugador=None, zona=None,
+                 salvaje=False, mochila=None):
+        """modo: "1v1", "3v3" o "aventura".
+
+        En el modo aventura se pasan el rival, la vida actual del equipo (hp_jugador),
+        la zona del mapa (para el fondo) y la mochila (para usar Pociones).
+        """
+        self.modo = modo
+        self.zona = zona
+        self.salvaje = salvaje
+        self.mochila = mochila
+        self.resultado = None       # "victoria" o "derrota" cuando turno == "fin"
+        self.eq_jugador = list(equipo_jugador)
+
+        if equipo_rival is None:
+            pool_disponible = [p for p in LISTA_PLANA_POKES if p not in self.eq_jugador]
+            self.eq_ia = random.sample(pool_disponible, len(self.eq_jugador))
+        else:
+            self.eq_ia = list(equipo_rival)
         self.idx_activo_i = 0
 
-        self.hp_jugador = {p: CATALOGO_POKEMONS[p]["hp"] for p in self.eq_jugador}
+        hp_guardado = hp_jugador or {}
+        self.hp_jugador = {p: hp_guardado.get(p, CATALOGO_POKEMONS[p]["hp"]) for p in self.eq_jugador}
         self.hp_ia = {p: CATALOGO_POKEMONS[p]["hp"] for p in self.eq_ia}
+
+        # Empieza el primer Pokémon que no esté debilitado
+        self.idx_activo_j = 0
+        for idx, p in enumerate(self.eq_jugador):
+            if self.hp_jugador[p] > 0:
+                self.idx_activo_j = idx
+                break
 
         # Sucesos para que la interfaz los anime, ej: ("daño", "ia", 30)
         self.eventos = []
@@ -41,7 +64,10 @@ class Combate:
         self.cargar_pokemons_activos()
         self.turno = "jugador"
         self.sub_menu = "principal"
-        self.mensaje = f"¡El rival envió a {self.i_nombre.capitalize()}!"
+        if salvaje:
+            self.mensaje = f"¡Un {self.i_nombre.capitalize()} salvaje apareció!"
+        else:
+            self.mensaje = f"¡El rival envió a {self.i_nombre.capitalize()}!"
 
     def actualizar_hp_actual(self):
         self.hp_jugador[self.p_nombre] = self.p_hp
@@ -95,8 +121,12 @@ class Combate:
                 self.sub_menu = "principal"
                 return
             else:
-                self.mensaje = "¡Has derrotado a todos los rivales! ¡Victoria!"
+                if self.salvaje:
+                    self.mensaje = f"¡{self.i_nombre.capitalize()} salvaje se debilitó! ¡Victoria!"
+                else:
+                    self.mensaje = "¡Has derrotado a todos los rivales! ¡Victoria!"
                 self.turno = "fin"
+                self.resultado = "victoria"
                 return
 
         self.turno = "ia"
@@ -120,6 +150,32 @@ class Combate:
         self.mensaje = f"¡Adelante, {self.p_nombre.capitalize()}!"
         self.turno = "ia"
         self.sub_menu = "principal"
+
+    def usar_pocion(self, idx_pokemon):
+        """Cura a un Pokémon del equipo con una Poción. Gasta el turno si se usa."""
+        self.sub_menu = "principal"
+        if self.turno != "jugador" or self.mochila is None:
+            return
+        if self.mochila.get("pocion", 0) <= 0:
+            self.mensaje = "¡No te quedan Pociones!"
+            return
+        self.actualizar_hp_actual()
+        nombre = self.eq_jugador[idx_pokemon]
+        hp_max = CATALOGO_POKEMONS[nombre]["hp"]
+        hp = self.hp_jugador[nombre]
+        if hp <= 0:
+            self.mensaje = f"¡{nombre.capitalize()} está debilitado! La Poción no sirve."
+            return
+        if hp >= hp_max:
+            self.mensaje = f"¡{nombre.capitalize()} ya tiene la vida llena!"
+            return
+        curado = min(CURACION_POCION, hp_max - hp)
+        self.hp_jugador[nombre] = hp + curado
+        if nombre == self.p_nombre:
+            self.p_hp = self.hp_jugador[nombre]
+        self.mochila["pocion"] -= 1
+        self.mensaje = f"¡Usaste una Poción! {nombre.capitalize()} recuperó {curado} HP."
+        self.turno = "ia"
 
     def turno_ia(self):
         if self.turno != "ia":
@@ -156,5 +212,6 @@ class Combate:
             else:
                 self.mensaje = "¡Tu equipo ha caído debilitado! Derrota..."
                 self.turno = "fin"
+                self.resultado = "derrota"
         else:
             self.turno = "jugador"

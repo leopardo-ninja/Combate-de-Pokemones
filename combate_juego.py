@@ -1,6 +1,7 @@
 import sys
 import pygame
 import ui
+import aventura
 
 from config import (
     ANCHO_VIRTUAL, ALTO_VIRTUAL, ANCHO_REAL, ALTO_REAL, MODO_VENTANA, AZUL_OSCURO,
@@ -23,17 +24,21 @@ def tecla_a_accion(tecla, escena):
     return None
 
 
-def aplicar_accion(accion, combate, modo_juego):
+def aplicar_accion(accion, combate):
     """Ejecuta sobre el motor una acción de combate (venga del teclado o del mouse)."""
     if combate.turno != "jugador":
         return
     if accion == "luchar":
         combate.sub_menu = "luchar"
     elif accion == "cambiar":
-        if modo_juego == "3v3":
-            combate.sub_menu = "cambiar"
-        else:
+        if combate.modo == "1v1":
             combate.mensaje = "¡Solo tienes 1 Pokémon en 1v1!"
+        else:
+            combate.sub_menu = "cambiar"
+    elif accion == "mochila":
+        if combate.mochila is not None:
+            combate.sub_menu = "mochila"
+            combate.mensaje = f"¿A quién le das una Poción? (te quedan {combate.mochila.get('pocion', 0)})"
     elif accion == "volver":
         combate.sub_menu = "principal"
     elif isinstance(accion, tuple):
@@ -42,6 +47,8 @@ def aplicar_accion(accion, combate, modo_juego):
             combate.ejecutar_turno(idx)
         elif tipo == "pokemon":
             combate.cambiar_pokemon_jugador(idx)
+        elif tipo == "pocion":
+            combate.usar_pocion(idx)
 
 
 def main():
@@ -71,10 +78,15 @@ def main():
     escena_combate = None
     retraso_ia = 0
 
+    # Modo aventura
+    escena_eleccion = None
+    escena_mapa = None
+    entrenador_elegido = None
+
     tipo_claves = list(SECCIONES_POKEMON.keys())
 
-    textos_menu = ["Modo 1v1", "Modo 3v3", "Biblioteca de Pokémon", "Salir"]
-    botones_menu = [ui.Boton(710, 430 + i * 90, 500, 70, t) for i, t in enumerate(textos_menu)]
+    textos_menu = ["Modo Aventura", "Modo 1v1", "Modo 3v3", "Biblioteca de Pokémon", "Salir"]
+    botones_menu = [ui.Boton(710, 320 + i * 100, 500, 70, t) for i, t in enumerate(textos_menu)]
 
     while ejecutando:
         pantalla.fill(AZUL_OSCURO)
@@ -84,6 +96,13 @@ def main():
             accion_combate = None
             if evento.type == pygame.QUIT:
                 ejecutando = False
+
+            # --- Modo aventura: las escenas manejan sus propios eventos ---
+            elif estado_app == "elegir_entrenador":
+                escena_eleccion.manejar_evento(evento)
+
+            elif estado_app == "mapa":
+                escena_mapa.manejar_evento(evento)
 
             # --- Mouse en el menú principal ---
             elif evento.type == pygame.MOUSEMOTION and estado_app == "menu_principal":
@@ -121,7 +140,10 @@ def main():
 
                 elif estado_app == "seleccion":
                     limite = len(LISTA_PLANA_POKES)
-                    if evento.key == pygame.K_DOWN:
+                    if evento.key == pygame.K_ESCAPE:
+                        estado_app = "menu_principal"
+                        seleccion_idx = 0
+                    elif evento.key == pygame.K_DOWN:
                         seleccion_idx = (seleccion_idx + 1) % limite
                     elif evento.key == pygame.K_UP:
                         seleccion_idx = (seleccion_idx - 1) % limite
@@ -132,7 +154,16 @@ def main():
 
                         meta_equipo = 1 if modo_juego == "1v1" else 3
                         if len(equipo_seleccionado) == meta_equipo:
-                            estado_app = "estadisticas"
+                            if modo_juego == "aventura":
+                                jugador = aventura.Jugador(entrenador_elegido, equipo_seleccionado)
+                                escena_mapa = aventura.EscenaMapa(jugador)
+                                escena_mapa.dialogo = (
+                                    f"¡Bienvenido, {jugador.nombre}! Explora el bosque, la playa y las dunas. "
+                                    "La hierba alta esconde Pokémon salvajes. Compra en la TIENDA y reta al GIMNASIO.",
+                                    None, True)
+                                estado_app = "mapa"
+                            else:
+                                estado_app = "estadisticas"
 
                     y_item_sel = 0
                     idx_actual = 0
@@ -220,33 +251,65 @@ def main():
             # --- Seleccion combate ---
             if accion_combate is not None:
                 if accion_combate == "menu":
-                    estado_app = "menu_principal"
-                    seleccion_idx = 0
+                    if combate.modo == "aventura":
+                        escena_mapa.terminar_combate(combate)
+                        estado_app = "mapa"
+                    else:
+                        estado_app = "menu_principal"
+                        seleccion_idx = 0
                 else:
-                    aplicar_accion(accion_combate, combate, modo_juego)
+                    aplicar_accion(accion_combate, combate)
 
         # --- Seleccion Menu ---
         if activar_opcion and estado_app == "menu_principal":
             if seleccion_idx == 0:
-                modo_juego = "1v1"
+                escena_eleccion = aventura.EscenaElegirEntrenador()
+                estado_app = "elegir_entrenador"
+            elif seleccion_idx in (1, 2):
+                modo_juego = "1v1" if seleccion_idx == 1 else "3v3"
                 estado_app = "seleccion"
                 seleccion_idx = 0
                 scroll_offset_sel = 0
                 equipo_seleccionado = []
-            elif seleccion_idx == 1:
-                modo_juego = "3v3"
-                estado_app = "seleccion"
-                seleccion_idx = 0
-                scroll_offset_sel = 0
-                equipo_seleccionado = []
-            elif seleccion_idx == 2:
+            elif seleccion_idx == 3:
                 estado_app = "biblioteca"
                 lib_sec_idx = 0
                 lib_poke_idx = 0
                 lib_detalle = False
                 scroll_offset_lib = 0
-            elif seleccion_idx == 3:
+            elif seleccion_idx == 4:
                 ejecutando = False
+
+        # --- Peticiones de las escenas del modo aventura ---
+        if estado_app == "elegir_entrenador" and escena_eleccion.peticion:
+            peticion = escena_eleccion.peticion
+            escena_eleccion.peticion = None
+            if peticion[0] == "elegido":
+                entrenador_elegido = peticion[1]
+                modo_juego = "aventura"
+                estado_app = "seleccion"
+                seleccion_idx = 0
+                scroll_offset_sel = 0
+                equipo_seleccionado = []
+            else:
+                estado_app = "menu_principal"
+                seleccion_idx = 0
+
+        if estado_app == "mapa":
+            escena_mapa.actualizar(pygame.key.get_pressed())
+            peticion = escena_mapa.peticion
+            escena_mapa.peticion = None
+            if peticion and peticion[0] == "combate":
+                _, rival, zona, tipo = peticion
+                j = escena_mapa.jugador
+                combate = Combate(j.equipo, "aventura", equipo_rival=rival, hp_jugador=j.hp,
+                                  zona=zona, salvaje=(tipo == "salvaje"), mochila=j.mochila)
+                escena_combate = ui.EscenaCombate(combate)
+                retraso_ia = 0
+                estado_app = "combate"
+            elif peticion and peticion[0] == "menu":
+                estado_app = "menu_principal"
+                seleccion_idx = 0
 
         # ================= RENDERIZADO VISUAL RESPONSIVO =================
         if estado_app == "menu_principal":
@@ -265,6 +328,12 @@ def main():
                     combate.turno_ia()
                     retraso_ia = 0
             escena_combate.dibujar(pantalla)
+
+        elif estado_app == "elegir_entrenador":
+            escena_eleccion.dibujar(pantalla)
+
+        elif estado_app == "mapa":
+            escena_mapa.dibujar(pantalla)
 
         elif estado_app == "biblioteca":
             ui.dibujar_biblioteca(pantalla, tipo_claves, scroll_offset_lib, lib_detalle, lib_sec_idx, lib_poke_idx)

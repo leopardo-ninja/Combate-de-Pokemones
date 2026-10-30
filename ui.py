@@ -103,6 +103,9 @@ TEMAS_TIPO_COMBATE = {
 # Número de fondo (fila * 3 + columna, empezando en 0) para cada tipo
 FONDO_POR_TIPO = {"Planta": 0, "Agua": 3, "Tierra": 6, "Eléctrico": 7, "Fuego": 11}
 
+# En el modo aventura el fondo depende de la zona del mapa donde empezó el combate
+FONDO_POR_ZONA = {"pradera": 0, "bosque": 2, "playa": 3, "dunas": 7, "gimnasio": 10}
+
 
 # ----------------- DIBUJAR PANTALLA DE COMBATE RESPONSIVA -----------------
 
@@ -112,6 +115,7 @@ RECT_LUCHAR = pygame.Rect(1200, 830, 280, 75)
 RECT_CAMBIAR = pygame.Rect(1510, 830, 280, 75)
 RECT_VOLVER = pygame.Rect(140, 940, 220, 55)
 RECT_MENU_FIN = pygame.Rect(1310, 830, 480, 75)
+RECT_MOCHILA = pygame.Rect(1200, 920, 590, 70)
 
 
 def rect_habilidad(idx):
@@ -217,11 +221,16 @@ class EscenaCombate:
         if c.turno != "jugador":
             return []
         if c.sub_menu == "principal":
-            return [("luchar", RECT_LUCHAR), ("cambiar", RECT_CAMBIAR)]
+            zonas = [("luchar", RECT_LUCHAR), ("cambiar", RECT_CAMBIAR)]
+            if c.mochila is not None:
+                zonas.append(("mochila", RECT_MOCHILA))
+            return zonas
         if c.sub_menu == "luchar":
             zonas = [(("habilidad", i), rect_habilidad(i)) for i in range(len(c.p_data["habilidades"]))]
         elif c.sub_menu == "cambiar":
             zonas = [(("pokemon", i), rect_pokemon(i)) for i in range(len(c.eq_jugador))]
+        elif c.sub_menu == "mochila":
+            zonas = [(("pocion", i), rect_pokemon(i)) for i in range(len(c.eq_jugador))]
         else:
             return []
         return zonas + [("volver", RECT_VOLVER)]
@@ -242,7 +251,11 @@ class EscenaCombate:
         sprite_ia = obtener_sprite(combate.i_nombre, "frente", (680, 680), (200, 50, 50)) #Pokemon rival tamano
         sprite_jugador = obtener_sprite(combate.p_nombre, "espalda", (680, 680), (50, 100, 200)) #Pokemon aliado tamano
 
-        pantalla.blit(obtener_fondo(FONDO_POR_TIPO.get(combate.p_data["tipo"], 0)), (0, 0))
+        if combate.zona in FONDO_POR_ZONA:
+            indice_fondo = FONDO_POR_ZONA[combate.zona]
+        else:
+            indice_fondo = FONDO_POR_TIPO.get(combate.p_data["tipo"], 0)
+        pantalla.blit(obtener_fondo(indice_fondo), (0, 0))
 
         self._dibujar_sprite(pantalla, sprite_ia, (1050, 30), "ia") #Pokemon rival posicion
         self._dibujar_sprite(pantalla, sprite_jugador, (300, 350), "jugador") #Pokemon aliado posicion
@@ -299,8 +312,14 @@ class EscenaCombate:
 
             pygame.draw.rect(pantalla, VERDE_BOTON, RECT_CAMBIAR, border_radius=12)
             pygame.draw.rect(pantalla, NEGRO, RECT_CAMBIAR, 3, border_radius=12)
-            txt_cambio = "CAMBIAR" if combate.modo == "3v3" else "POKÉMON"
+            txt_cambio = "POKÉMON" if combate.modo == "1v1" else "CAMBIAR"
             pantalla.blit(FUENTE_GRANDE.render(txt_cambio, True, BLANCO), (1570, 845))
+
+            if combate.mochila is not None:
+                pygame.draw.rect(pantalla, (225, 150, 40), RECT_MOCHILA, border_radius=12)
+                pygame.draw.rect(pantalla, NEGRO, RECT_MOCHILA, 3, border_radius=12)
+                txt_moch = FUENTE.render(f"MOCHILA  (Pociones: {combate.mochila.get('pocion', 0)})", True, BLANCO)
+                pantalla.blit(txt_moch, txt_moch.get_rect(center=RECT_MOCHILA.center))
 
         elif combate.turno == "jugador" and combate.sub_menu == "luchar":
             habilidades = combate.p_data["habilidades"]
@@ -329,12 +348,26 @@ class EscenaCombate:
                 pantalla.blit(txt_eq, (bx + 20, by + 25))
             self._dibujar_boton_volver(pantalla)
 
+        elif combate.turno == "jugador" and combate.sub_menu == "mochila":
+            for idx, p_eq in enumerate(combate.eq_jugador):
+                r = rect_pokemon(idx)
+                hp_actual_poke = combate.hp_jugador[p_eq]
+                col_sel = (225, 150, 40) if hp_actual_poke > 0 else (120, 120, 120)
+                pygame.draw.rect(pantalla, col_sel, r, border_radius=12)
+                pygame.draw.rect(pantalla, NEGRO, r, 3, border_radius=12)
+                pantalla.blit(FUENTE_CHICA.render(p_eq[:10].capitalize(), True, BLANCO), (r.x + 14, r.y + 12))
+                hp_max = CATALOGO_POKEMONS[p_eq]["hp"]
+                pantalla.blit(FUENTE_CHICA.render(f"{hp_actual_poke}/{hp_max}", True, BLANCO), (r.x + 14, r.y + 44))
+            self._dibujar_boton_volver(pantalla)
+
         elif combate.turno == "fin":
-            txt_r = FUENTE_GRANDE.render("Presiona [ENTER] para volver al Menú Principal", True, ROJO_BOTON)
+            destino = "al Mapa" if combate.modo == "aventura" else "al Menú Principal"
+            txt_r = FUENTE_GRANDE.render(f"Presiona [ENTER] para volver {destino}", True, ROJO_BOTON)
             pantalla.blit(txt_r, (140, 920))
             pygame.draw.rect(pantalla, AZUL_BOTON, RECT_MENU_FIN, border_radius=12)
             pygame.draw.rect(pantalla, NEGRO, RECT_MENU_FIN, 3, border_radius=12)
-            txt_menu = FUENTE.render("VOLVER AL MENÚ", True, BLANCO)
+            txt_fin = "VOLVER AL MAPA" if combate.modo == "aventura" else "VOLVER AL MENÚ"
+            txt_menu = FUENTE.render(txt_fin, True, BLANCO)
             pantalla.blit(txt_menu, txt_menu.get_rect(center=RECT_MENU_FIN.center))
 
         if combate.turno == "jugador":
@@ -354,17 +387,17 @@ class EscenaCombate:
 # ----------------- PANTALLAS -----------------
 def dibujar_menu_principal(pantalla, botones, seleccion_idx):
     pantalla.fill((20, 35, 60))
-    pygame.draw.rect(pantalla, AZUL_DS, (610, 240, 700, 600), border_radius=20)
-    pygame.draw.rect(pantalla, BLANCO, (610, 240, 700, 600), 6, border_radius=20)
+    pygame.draw.rect(pantalla, AZUL_DS, (610, 170, 700, 760), border_radius=20)
+    pygame.draw.rect(pantalla, BLANCO, (610, 170, 700, 760), 6, border_radius=20)
 
     titulo = FUENTE_GRANDE.render("POKÉMON AÑIL - DUELO", True, BLANCO)
-    pantalla.blit(titulo, (720, 300))
+    pantalla.blit(titulo, titulo.get_rect(center=(960, 250)))
 
     for idx, boton in enumerate(botones):
         boton.dibujar(pantalla, resaltado=(idx == seleccion_idx))
 
     sub_inf = FUENTE_CHICA.render("Usa Flechas ARRIBA/ABAJO y ENTER para seleccionar", True, (200, 220, 240))
-    pantalla.blit(sub_inf, (710, 800))
+    pantalla.blit(sub_inf, sub_inf.get_rect(center=(960, 880)))
 
 
 def dibujar_seleccion(pantalla, equipo_seleccionado, seleccion_idx, scroll_offset_sel, modo_juego):

@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.venv/
+# Fotos personales del equipo (solo se usan como referencia para dibujar)
+herramientas/fotos/
