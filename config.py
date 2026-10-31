@@ -42,7 +42,8 @@ COLORES_TIPO = {
 }
 
 # Fuentes Escaladas
-RUTA_FUENTE = "assets/fuentes/Comfortaa-Bold.ttf"
+RUTA_FUENTE = "assets/fuentes/PixelifySans-Bold.ttf"
 FUENTE = pygame.font.Font(RUTA_FUENTE, 26)
 FUENTE_CHICA = pygame.font.Font(RUTA_FUENTE, 20)
 FUENTE_GRANDE = pygame.font.Font(RUTA_FUENTE, 38)
+FUENTE_HABILIDAD = pygame.font.Font(RUTA_FUENTE, 25) 

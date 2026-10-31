@@ -6,7 +6,7 @@ from config import (
     ANCHO_VIRTUAL, ALTO_VIRTUAL, ANCHO_REAL, ALTO_REAL,
     BLANCO, NEGRO, GRIS_CLARO, GRIS_OSCURO, AZUL_DS, AZUL_OSCURO,
     ROJO_BOTON, VERDE_BOTON, AZUL_BOTON, BORDE_CAJA, AMARILLO_ALERTA, ROJO_ALERTA,
-    COLORES_TIPO, FUENTE, FUENTE_CHICA, FUENTE_GRANDE,
+    COLORES_TIPO, FUENTE, FUENTE_CHICA, FUENTE_GRANDE, FUENTE_HABILIDAD 
 )
 from pokemons import SECCIONES_POKEMON, CATALOGO_POKEMONS, LISTA_PLANA_POKES
 from escenarios import ESCENARIOS
@@ -33,29 +33,39 @@ def obtener_sprite(nombre, vista, tamaño, color_respaldo=None):
     return _CACHE_SPRITES[clave]
 
 
-_HOJA_FONDOS = None
 _CACHE_FONDOS = {}
 
 
 def obtener_fondo(indice):
-    #Recorta un fondo de la hoja (3 columnas x 4 filas), lo agranda 8 veces y lo sube 72 px
-    global _HOJA_FONDOS
+    #Carga assets/fondos/fondo_XX.png, lo agranda 8 veces y lo sube 72 px. Devuelve None si no existe el archivo
     if indice not in _CACHE_FONDOS:
-        if _HOJA_FONDOS is None:
-            _HOJA_FONDOS = pygame.image.load("assets/fondos/fondos.png").convert_alpha()
-        fila, col = divmod(indice, 3)
-        recorte = _HOJA_FONDOS.subsurface((col * 240, fila * 112, 240, 111))
-        grande = pygame.transform.scale(recorte, (1920, 888))
-        fondo = pygame.Surface((ANCHO_VIRTUAL, ALTO_VIRTUAL))
-        fondo.fill(tuple(recorte.get_at((239, 110)))[:3])   # el color de la franja inferior rellena lo que sobra abajo
-        fondo.blit(grande, (0, -72))
-        _CACHE_FONDOS[indice] = fondo
+        ruta = f"assets/fondos/fondo_{indice:02d}.png"
+        if not os.path.exists(ruta):
+            _CACHE_FONDOS[indice] = None
+        else:
+            recorte = pygame.image.load(ruta).convert_alpha()
+            grande = pygame.transform.scale(recorte, (1920, 888))
+            fondo = pygame.Surface((ANCHO_VIRTUAL, ALTO_VIRTUAL))
+            fondo.fill(tuple(recorte.get_at((recorte.get_width() - 1, recorte.get_height() - 1)))[:3])
+            fondo.blit(grande, (0, -72))
+            _CACHE_FONDOS[indice] = fondo
     return _CACHE_FONDOS[indice]
 
 
 def pos_virtual(pos):
     #Posicion del mouse
     return (int(pos[0] * ANCHO_VIRTUAL / ANCHO_REAL), int(pos[1] * ALTO_VIRTUAL / ALTO_REAL))
+
+
+# ----------------- RESALTADO UNICO DE BOTONES -----------------
+COLOR_RESALTE = (222, 239, 255)        # linea interior (plateado)
+COLOR_RESALTE_BORDE = (30, 30, 30)     # contorno exterior oscuro
+
+
+def dibujar_resalte(pantalla, rect, radio=12):
+    """Resalte unico de todo el juego: borde doble, oscuro por fuera y plateado por dentro."""
+    pygame.draw.rect(pantalla, COLOR_RESALTE_BORDE, rect.inflate(8, 8), 8, border_radius=radio + 2)
+    pygame.draw.rect(pantalla, COLOR_RESALTE, rect.inflate(4, 4), 4, border_radius=radio)
 
 
 def separar_texto_en_lineas(texto, fuente, max_ancho):
@@ -85,9 +95,11 @@ class Boton:
         return self.rect.collidepoint(pos_virtual(pos_real))
 
     def dibujar(self, superficie, resaltado=False):
-        color = (255, 230, 50) if resaltado else BLANCO
+        color = BLANCO
         pygame.draw.rect(superficie, AZUL_OSCURO, self.rect, border_radius=12)
         pygame.draw.rect(superficie, color, self.rect, 4, border_radius=12)
+        if resaltado:
+            dibujar_resalte(superficie, self.rect)
         txt = FUENTE.render(self.texto, True, color)
         superficie.blit(txt, txt.get_rect(center=self.rect.center))
 
@@ -104,7 +116,7 @@ TEMAS_TIPO_COMBATE = {
 # ----------------- ESCENARIOS, BASES Y CAJAS DE VIDA -----------------
 # Posiciones del combate (coordenadas virtuales 1920x1080)
 
-POS_POKEMON_IA = (1030, 160)          # Posicion Pokemon IA
+POS_POKEMON_IA = (1030, 160)        # Posicion Pokemon IA
 POS_POKEMON_JUG = (300, 350)        # Posicion Pokemon Jugador
 BASE_IA_CENTRO = (1300, 500)        # Posicion Arena IA
 BASE_JUG_ARRIBA = (640, 700)        # Posicion Arena Jugador
@@ -113,8 +125,8 @@ ESCALA_BASE_JUG = 5
 
 # Cajas de vida (Jugador y Rival)
 ESCALA_CAJA = 1.5 #Dimesion
-BARRA_CAJA = {"rival": (93, 40, 211, 49), "jugador": (116, 40, 233, 49)} #Barra de vida
-POS_CAJA = {"rival": (600, 100), "jugador": (1200, 650)} #Posicion
+BARRA_CAJA = {"rival": (93, 40, 211, 49), "jugador": (116, 40, 233, 49)}        #Barra de vida
+POS_CAJA = {"rival": (600, 100), "jugador": (1200, 650)}                        #Posicion caja de vida
 
 _CACHE_BASES = {}
 _CACHE_CAJAS = {}
@@ -152,7 +164,7 @@ def obtener_fondo_escenario(indice):
     if indice not in _CACHE_ESCENARIOS:
         esc = ESCENARIOS[indice]
         fondo = None
-        if esc["fondo"] is not None and os.path.exists("assets/fondos/fondos.png"):
+        if esc["fondo"] is not None:
             fondo = obtener_fondo(esc["fondo"])
         if fondo is None:
             fondo = pygame.Surface((ANCHO_VIRTUAL, ALTO_VIRTUAL))
@@ -190,16 +202,80 @@ def obtener_vista_previa(indice, tamaño):
 # ----------------- DIBUJAR PANTALLA DE COMBATE RESPONSIVA -----------------
 
 
-# Zonas pulsables del combate (coordenadas virtuales 1920x1080)
-RECT_LUCHAR = pygame.Rect(1200, 830, 280, 75)
-RECT_CAMBIAR = pygame.Rect(1510, 830, 280, 75)
-RECT_VOLVER = pygame.Rect(140, 940, 220, 55)
-RECT_MENU_FIN = pygame.Rect(1310, 830, 480, 75)
+# Botones pantalla combate (x, y, ancho, alto)
+RECT_LUCHAR = pygame.Rect(900, 880, 260, 60)                # LUCHAR 
+RECT_CAMBIAR = pygame.Rect(1200, 880, 260, 60)              # POKEMON
+RECT_VOLVER = pygame.Rect(150, 925, 220, 55)                # VOLVER
+RECT_MENU_FIN = pygame.Rect(1200, 925, 260, 60)             # MENU
 OFFSET_NOMBRE = {"rival": (12, 11), "jugador": (36, 11)}    # Diferencia de posicion entre los nombres de los pokemons
 
 
+# Cajas de los ataques
+ESCALA_ATAQUE = 1.8                  # Tamaño de las cajas de ataque
+ORIGEN_ATAQUES = (545, 905)          # Esquina superior izquierda de la fila de 4 cajas
+SEP_ATAQUES = (20, 10)               # Separación horizontal entre cajas (el vertical ya no se usa)
+TAM_ATAQUE = (int(124 * ESCALA_ATAQUE), int(55 * ESCALA_ATAQUE))
+
+# ----------------- BARRA DE MENSAJES (imagen en 3 tramos) -----------------
+RUTA_BARRA_MSJ = "assets/ui/barra_mensaje.png"
+BARRA_MSJ_RECT = pygame.Rect(100, 850, 1500, 210)   # x, y, ancho, alto
+BARRA_MSJ_CAP_IZQ = 14      # px de la imagen original que forman el extremo izquierdo
+BARRA_MSJ_CAP_DER = 26      # px del extremo derecho (incluye la pestana gris)
+_CACHE_BARRA_MSJ = {}
+
+
+def obtener_barra_mensaje(ancho, alto):
+    """Escala la barra por tramos con 'nearest' (pixel art nitido): los extremos conservan su
+    proporcion y solo se estira el centro blanco, asi los bordes no se deforman ni se difuminan."""
+    clave = (ancho, alto)
+    if clave not in _CACHE_BARRA_MSJ:
+        if not os.path.exists(RUTA_BARRA_MSJ):
+            _CACHE_BARRA_MSJ[clave] = None
+            return None
+        img = pygame.image.load(RUTA_BARRA_MSJ).convert_alpha()
+        w, h = img.get_size()
+        # Esquinas claras de 1 px que sobran en la imagen: se hacen transparentes
+        for (cx, cy) in ((0, 0), (1, 0), (0, 1), (w - 1, 0), (w - 2, 0), (w - 1, 1),
+                         (0, h - 1), (1, h - 1), (0, h - 2), (w - 1, h - 1), (w - 2, h - 1), (w - 1, h - 2)):
+            if img.get_at((cx, cy))[:3] != (74, 66, 66):
+                img.set_at((cx, cy), (0, 0, 0, 0))
+        esc = alto / h
+        cap_i = round(BARRA_MSJ_CAP_IZQ * esc)
+        cap_d = round(BARRA_MSJ_CAP_DER * esc)
+        izq = pygame.transform.scale(img.subsurface((0, 0, BARRA_MSJ_CAP_IZQ, h)), (cap_i, alto))
+        der = pygame.transform.scale(img.subsurface((w - BARRA_MSJ_CAP_DER, 0, BARRA_MSJ_CAP_DER, h)), (cap_d, alto))
+        centro = pygame.transform.scale(img.subsurface((BARRA_MSJ_CAP_IZQ, 0, w - BARRA_MSJ_CAP_IZQ - BARRA_MSJ_CAP_DER, h)),
+                                        (ancho - cap_i - cap_d, alto))
+        barra = pygame.Surface((ancho, alto), pygame.SRCALPHA)
+        barra.blit(izq, (0, 0))
+        barra.blit(centro, (cap_i, 0))
+        barra.blit(der, (ancho - cap_d, 0))
+        _CACHE_BARRA_MSJ[clave] = barra
+    return _CACHE_BARRA_MSJ[clave]
+
+
+# Tipo del ataque -> archivo de la caja
+CAJA_POR_TIPO = {"Normal": "normal", "Fuego": "fire", "Agua": "water", "Planta": "grass",
+                 "Eléctrico": "electric", "Tierra": "ground", "Psíquico": "psychic", "Estado": "unknown"}
+_CACHE_ATAQUES = {}
+
+
+def obtener_caja_ataque(tipo):
+    clave = CAJA_POR_TIPO.get(tipo, "normal")
+    if clave not in _CACHE_ATAQUES:
+        ruta = f"assets/ui/ataque_{clave}.png"
+        if os.path.exists(ruta):
+            _CACHE_ATAQUES[clave] = pygame.transform.smoothscale(pygame.image.load(ruta).convert_alpha(), TAM_ATAQUE)
+        else:
+            _CACHE_ATAQUES[clave] = None
+    return _CACHE_ATAQUES[clave]
+
+
 def rect_habilidad(idx):
-    return pygame.Rect(1200 if idx % 2 == 0 else 1510, 830 if idx < 2 else 920, 280, 75)
+    # Las 4 habilidades en una sola fila
+    return pygame.Rect(ORIGEN_ATAQUES[0] + idx * (TAM_ATAQUE[0] + SEP_ATAQUES[0]),
+                       ORIGEN_ATAQUES[1],
+                       TAM_ATAQUE[0], TAM_ATAQUE[1])
 
 
 def rect_pokemon(idx):
@@ -316,18 +392,9 @@ class EscenaCombate:
         if n <= 1:
             return
         c = self.combate
-        if c.turno == "jugador" and c.sub_menu == "luchar":
-            # Habilidades en cuadrícula 2x2: izquierda/derecha cambian de columna, arriba/abajo de fila
-            if tecla in (pygame.K_LEFT, pygame.K_RIGHT):
-                nuevo = self.seleccion ^ 1
-            else:
-                nuevo = (self.seleccion + 2) % 4
-            if nuevo < n:
-                self.seleccion = nuevo
-        else:
-            # Botones en una sola fila
-            paso = 1 if tecla in (pygame.K_RIGHT, pygame.K_DOWN) else -1
-            self.seleccion = (self.seleccion + paso) % n
+        # Botones y habilidades van en una sola fila
+        paso = 1 if tecla in (pygame.K_RIGHT, pygame.K_DOWN) else -1
+        self.seleccion = (self.seleccion + paso) % n
 
     def accion_seleccionada(self):
         # Reactividad del bonton al hover
@@ -395,32 +462,58 @@ class EscenaCombate:
         self._dibujar_caja_vida(pantalla, "rival", combate.i_nombre, combate.i_hp, combate.i_hp_max, False)
         self._dibujar_caja_vida(pantalla, "jugador", combate.p_nombre, combate.p_hp, combate.p_hp_max, True)
 
-        pygame.draw.rect(pantalla, (20, 20, 30), (96, 796, 1728, 228), border_radius=16)
-        pygame.draw.rect(pantalla, NEGRO, (100, 800, 1720, 220), border_radius=14)
-        pygame.draw.rect(pantalla, GRIS_CLARO, (110, 810, 1700, 200), border_radius=10)
-        txt_msj = FUENTE.render(combate.mensaje, True, NEGRO)
-        pantalla.blit(txt_msj, (140, 880))
+        eligiendo_ataque = combate.turno == "jugador" and combate.sub_menu == "luchar"
+        # La barra de mensajes se ve siempre, tambien al elegir habilidad
+        barra = obtener_barra_mensaje(BARRA_MSJ_RECT.w, BARRA_MSJ_RECT.h)
+        if barra:
+            pantalla.blit(barra, BARRA_MSJ_RECT.topleft)
+        else:   # respaldo si falta assets/ui/barra_mensaje.png
+            pygame.draw.rect(pantalla, (20, 20, 30), (96, 796, 1728, 228), border_radius=16)
+            pygame.draw.rect(pantalla, NEGRO, (100, 800, 1720, 220), border_radius=14)
+            pygame.draw.rect(pantalla, GRIS_CLARO, (110, 810, 1700, 200), border_radius=10)
+        # Texto dentro de la zona blanca, en varias lineas si no cabe (sin pasar bajo los botones)
+        if not eligiendo_ataque:   # al elegir habilidad la barra queda sin mensaje
+            lineas = [l.strip() for l in separar_texto_en_lineas(combate.mensaje, FUENTE, 1020) if l.strip()]
+            alto_linea = FUENTE.get_linesize()
+            y_txt = BARRA_MSJ_RECT.centery - len(lineas) * alto_linea // 2
+            for l in lineas:
+                pantalla.blit(FUENTE.render(l, True, NEGRO), (BARRA_MSJ_RECT.x + 80, y_txt))
+                y_txt += alto_linea
 
         if combate.turno == "jugador" and combate.sub_menu == "principal":
+            # Texto boton LUCHAR
             pygame.draw.rect(pantalla, ROJO_BOTON, RECT_LUCHAR, border_radius=12)
             pygame.draw.rect(pantalla, NEGRO, RECT_LUCHAR, 3, border_radius=12)
-            pantalla.blit(FUENTE_GRANDE.render("LUCHAR", True, BLANCO), (1265, 845))
+            txt_luchar = FUENTE_GRANDE.render("LUCHAR", True, BLANCO)
+            pantalla.blit(txt_luchar, txt_luchar.get_rect(center=RECT_LUCHAR.center)) #900, 880
 
+            # Texto boton POKEMON
             pygame.draw.rect(pantalla, VERDE_BOTON, RECT_CAMBIAR, border_radius=12)
             pygame.draw.rect(pantalla, NEGRO, RECT_CAMBIAR, 3, border_radius=12)
             txt_cambio = "CAMBIAR" if combate.modo == "3v3" else "POKÉMON"
-            pantalla.blit(FUENTE_GRANDE.render(txt_cambio, True, BLANCO), (1570, 845))
+            txt_c = FUENTE_GRANDE.render(txt_cambio, True, BLANCO)
+            pantalla.blit(txt_c, txt_c.get_rect(center=RECT_CAMBIAR.center))
 
         elif combate.turno == "jugador" and combate.sub_menu == "luchar":
             habilidades = combate.p_data["habilidades"]
             for idx, hab in enumerate(habilidades):
                 nombre_h, pot, tipo_h = hab
                 r = rect_habilidad(idx)
-                bx, by = r.x, r.y
-                pygame.draw.rect(pantalla, tema["principal"], r, border_radius=12)
-                pygame.draw.rect(pantalla, NEGRO, r, 3, border_radius=12)
-                txt_h = FUENTE.render(nombre_h, True, BLANCO)
-                pantalla.blit(txt_h, (bx + 25, by + 22))
+                caja = obtener_caja_ataque(tipo_h)
+                if caja:
+                    pantalla.blit(caja, r.topleft)
+                else:   # respaldo si falta la imagen
+                    pygame.draw.rect(pantalla, tema["principal"], r, border_radius=12)
+                    pygame.draw.rect(pantalla, NEGRO, r, 3, border_radius=12)
+                # Nombre del ataque en la mitad de arriba de la caja
+                txt_h = FUENTE_HABILIDAD .render(nombre_h, True, NEGRO)
+                max_ancho = int(100 * ESCALA_ATAQUE)
+                if txt_h.get_width() > max_ancho:   # si no cabe, se reduce
+                    txt_h = pygame.transform.smoothscale(txt_h, (max_ancho, int(txt_h.get_height() * max_ancho / txt_h.get_width())))
+                pantalla.blit(txt_h, txt_h.get_rect(midleft=(r.x + int(12 * ESCALA_ATAQUE), r.y + int(19 * ESCALA_ATAQUE))))
+                # Potencia, en el lugar donde iba "PP /"
+                txt_pot = FUENTE_HABILIDAD .render(f"Pot. {pot}" if pot > 0 else "Pot. -", True, (60, 75, 60))
+                pantalla.blit(txt_pot, txt_pot.get_rect(midleft=(r.x + int(53 * ESCALA_ATAQUE), r.y + int(36 * ESCALA_ATAQUE))))
             self._dibujar_boton_volver(pantalla)
 
         elif combate.turno == "jugador" and combate.sub_menu == "cambiar":
@@ -439,25 +532,20 @@ class EscenaCombate:
             self._dibujar_boton_volver(pantalla)
 
         elif combate.turno == "fin":
-            txt_r = FUENTE_GRANDE.render("Presiona [ENTER] para volver al Menú Principal", True, ROJO_BOTON)
-            pantalla.blit(txt_r, (140, 920))
+            # Fin del combate, volver al menu
             pygame.draw.rect(pantalla, AZUL_BOTON, RECT_MENU_FIN, border_radius=12)
             pygame.draw.rect(pantalla, NEGRO, RECT_MENU_FIN, 3, border_radius=12)
-            txt_menu = FUENTE.render("VOLVER AL MENÚ", True, BLANCO)
+            txt_menu = FUENTE.render("MENU", True, BLANCO)
             pantalla.blit(txt_menu, txt_menu.get_rect(center=RECT_MENU_FIN.center))
 
-        if combate.turno == "jugador":
-            ayuda = FUENTE_CHICA.render("Flechas: mover  |  ENTER: elegir  |  ESC: volver", True, GRIS_OSCURO)
-            pantalla.blit(ayuda, (400, 960))
-
-        # Borde amarillo en el botón seleccionado (con flechas o con el mouse)
+        # Borde en el botón seleccionado (con flechas o con el mouse)
         zonas = self.zonas_navegables()
         if 0 <= self.seleccion < len(zonas):
-            pygame.draw.rect(pantalla, (255, 230, 50), zonas[self.seleccion][1], 4, border_radius=12)
+            dibujar_resalte(pantalla, zonas[self.seleccion][1])
         pos_mouse = pos_virtual(pygame.mouse.get_pos())
         for accion, rect in self.zonas_clic():
             if accion == "volver" and rect.collidepoint(pos_mouse):
-                pygame.draw.rect(pantalla, (255, 230, 50), rect, 4, border_radius=12)
+                dibujar_resalte(pantalla, rect)
 
 
 # ----------------- MODO ARENA: formato + escenario -----------------
@@ -558,15 +646,17 @@ class EscenaArena:
             txt = FUENTE_GRANDE.render(etiqueta, True, BLANCO)
             pantalla.blit(txt, txt.get_rect(center=r.center))
             if self.foco == "formato" and activo:
-                pygame.draw.rect(pantalla, (255, 230, 50), r, 5, border_radius=12)
+                dibujar_resalte(pantalla, r)
 
         # Cuadrícula de escenarios
         for i, esc in enumerate(ESCENARIOS):
             r = rect_celda_arena(i)
             elegido = (i == self.escenario)
             pygame.draw.rect(pantalla, (55, 65, 100) if elegido else (35, 42, 60), r, border_radius=12)
-            pygame.draw.rect(pantalla, (255, 230, 50) if (elegido and self.foco == "grid") else ((130, 150, 200) if elegido else (70, 85, 120)),
+            pygame.draw.rect(pantalla, (130, 150, 200) if elegido else (70, 85, 120),
                              r, 4 if elegido else 2, border_radius=12)
+            if elegido and self.foco == "grid":
+                dibujar_resalte(pantalla, r)
             base = obtener_base("rival", i, 1.5)
             if base:
                 pantalla.blit(base, base.get_rect(center=(r.centerx, r.y + 62)))
@@ -714,12 +804,14 @@ def dibujar_biblioteca(pantalla, tipo_claves, scroll_offset_lib, lib_detalle, li
 
                     is_highlighted = (r_idx == lib_sec_idx and c_idx == lib_poke_idx)
                     bg_c = (55, 65, 100) if is_highlighted else (35, 42, 60)
-                    b_c = (255, 230, 50) if is_highlighted else (70, 85, 120)
+                    b_c = (130, 150, 200) if is_highlighted else (70, 85, 120)
                     b_w = 4 if is_highlighted else 2
 
                     card_rect = pygame.Rect(cx, cy, 840, 170)
                     pygame.draw.rect(pantalla, bg_c, card_rect, border_radius=12)
                     pygame.draw.rect(pantalla, b_c, card_rect, b_w, border_radius=12)
+                    if is_highlighted:
+                        dibujar_resalte(pantalla, card_rect)
 
                     img_c = obtener_sprite(poke_name, "frente", (140, 140))
                     if img_c:
