@@ -7,7 +7,7 @@ from config import (
     ANCHO_VIRTUAL, ALTO_VIRTUAL, ANCHO_REAL, ALTO_REAL,
     BLANCO, NEGRO, GRIS_CLARO, GRIS_OSCURO, AZUL_DS, AZUL_OSCURO,
     ROJO_BOTON, VERDE_BOTON, AZUL_BOTON, BORDE_CAJA, AMARILLO_ALERTA, ROJO_ALERTA,
-    COLORES_TIPO, FUENTE, FUENTE_CHICA, FUENTE_GRANDE, FUENTE_HABILIDAD 
+    COLORES_TIPO, FUENTE, FUENTE_CHICA, FUENTE_GRANDE, FUENTE_HABILIDAD, RUTA_FUENTE
 )
 from pokemons import SECCIONES_POKEMON, CATALOGO_POKEMONS, LISTA_PLANA_POKES
 from escenarios import ESCENARIOS
@@ -217,12 +217,22 @@ ORIGEN_ATAQUES = (545, 905)          # Esquina superior izquierda de la fila de 
 SEP_ATAQUES = (20, 10)               # Separación horizontal entre cajas (el vertical ya no se usa)
 TAM_ATAQUE = (int(124 * ESCALA_ATAQUE), int(55 * ESCALA_ATAQUE))
 
-# ----------------- BARRA DE MENSAJES (imagen en 3 tramos) -----------------
+# Barra de mensajes
 RUTA_BARRA_MSJ = "assets/ui/barra_mensaje.png"
 BARRA_MSJ_RECT = pygame.Rect(100, 850, 1500, 210)   # x, y, ancho, alto
 BARRA_MSJ_CAP_IZQ = 14      # px de la imagen original que forman el extremo izquierdo
 BARRA_MSJ_CAP_DER = 26      # px del extremo derecho (incluye la pestana gris)
 _CACHE_BARRA_MSJ = {}
+
+
+# Cajas del equipo (cambiar de pokemon)
+ESCALA_EQUIPO = 2.4                    # Tamaño de las cajas
+ORIGEN_EQUIPO = (900, 895)            # Esquina superior izquierda de la primera caja (x, y)
+SEP_EQUIPO = 15                        # Espacio entre cajas
+TAM_EQUIPO = (int(78 * ESCALA_EQUIPO), int(49 * ESCALA_EQUIPO))
+BARRA_EQUIPO = (24, 33, 48, 3)         # Barra de vida dentro de la caja: x, y, ancho, alto (píxeles originales)
+FUENTE_EQUIPO = pygame.font.Font(RUTA_FUENTE, 17)   # Vida en número
+_CACHE_EQUIPO = {}
 
 
 def obtener_barra_mensaje(ancho, alto):
@@ -279,8 +289,23 @@ def rect_habilidad(idx):
                        TAM_ATAQUE[0], TAM_ATAQUE[1])
 
 
+def obtener_caja_equipo(seleccionada, apagada=False):
+    #Caja del equipo ya escalada. "apagada" la oscurece (Pokémon debilitado o que ya está combatiendo)
+    clave = (seleccionada, apagada)
+    if clave not in _CACHE_EQUIPO:
+        ruta = f"assets/ui/equipo_{'seleccionado' if seleccionada else 'normal'}.png"
+        if os.path.exists(ruta):
+            img = pygame.transform.scale(pygame.image.load(ruta).convert_alpha(), TAM_EQUIPO)
+            if apagada:
+                img.fill((120, 120, 120, 255), special_flags=pygame.BLEND_RGBA_MULT)
+            _CACHE_EQUIPO[clave] = img
+        else:
+            _CACHE_EQUIPO[clave] = None
+    return _CACHE_EQUIPO[clave]
+
+
 def rect_pokemon(idx):
-    return pygame.Rect(1200 + idx * 200, 860, 180, 80)
+    return pygame.Rect(ORIGEN_EQUIPO[0] + idx * (TAM_EQUIPO[0] + SEP_EQUIPO), ORIGEN_EQUIPO[1], TAM_EQUIPO[0], TAM_EQUIPO[1])
 
 # Dibuja el combate y maneja las animaciones
 class EscenaCombate:
@@ -533,18 +558,54 @@ class EscenaCombate:
             self._dibujar_boton_volver(pantalla)
 
         elif combate.turno == "jugador" and combate.sub_menu == "cambiar":
+            E = ESCALA_EQUIPO
             for idx, p_eq in enumerate(combate.eq_jugador):
                 r = rect_pokemon(idx)
-                bx, by = r.x, r.y
-                hp_actual_poke = combate.hp_jugador[p_eq]
-                col_sel = AZUL_BOTON if hp_actual_poke > 0 else (120, 120, 120)
-                if idx == combate.idx_activo_j:
-                    col_sel = GRIS_OSCURO
+                hp_actual = combate.hp_jugador[p_eq]
+                hp_max = CATALOGO_POKEMONS[p_eq]["hp"]
+                elegido = (idx == self.seleccion)
+                apagado = hp_actual <= 0 or idx == combate.idx_activo_j
+                caja = obtener_caja_equipo(elegido, apagado)
+                if caja:
+                    pantalla.blit(caja, r.topleft)
+                else:   # respaldo si falta la imagen
+                    pygame.draw.rect(pantalla, GRIS_OSCURO if apagado else AZUL_BOTON, r, border_radius=12)
+                    pygame.draw.rect(pantalla, NEGRO, r, 3, border_radius=12)
 
-                pygame.draw.rect(pantalla, col_sel, r, border_radius=12)
-                pygame.draw.rect(pantalla, NEGRO, r, 3, border_radius=12)
-                txt_eq = FUENTE.render(p_eq[:10].capitalize(), True, BLANCO)
-                pantalla.blit(txt_eq, (bx + 20, by + 25))
+                # Miniatura del Pokémon (arriba a la izquierda)
+                lado_mini = int(26 * E)
+                mini = obtener_sprite(p_eq, "frente", (lado_mini, lado_mini), (90, 90, 90))
+                if mini:
+                    if hp_actual <= 0:
+                        mini = mini.copy()
+                        mini.fill((110, 110, 110, 255), special_flags=pygame.BLEND_RGBA_MULT)
+                    pantalla.blit(mini, (r.x + int(3 * E), r.y + int(3 * E)))
+
+                # Nombre (a la derecha de la miniatura; se reduce si no cabe)
+                txt_nombre = FUENTE_CHICA.render(p_eq.capitalize(), True, (20, 40, 80) if elegido else BLANCO)
+                max_ancho = int(44 * E)
+                if txt_nombre.get_width() > max_ancho:
+                    txt_nombre = pygame.transform.smoothscale(txt_nombre, (max_ancho, int(txt_nombre.get_height() * max_ancho / txt_nombre.get_width())))
+                pantalla.blit(txt_nombre, txt_nombre.get_rect(midleft=(r.x + int(31 * E), r.y + int(15 * E))))
+
+                # Barra de vida (sobre la pista de la imagen)
+                bx, by, bw, bh = BARRA_EQUIPO
+                prop = max(0.0, min(1.0, hp_actual / hp_max))
+                if prop > 0.5:
+                    color, brillo = (72, 200, 112), (150, 235, 170)
+                elif prop > 0.2:
+                    color, brillo = (240, 200, 48), (255, 235, 130)
+                else:
+                    color, brillo = (232, 64, 48), (255, 140, 120)
+                ancho_fill = int(bw * E * prop)
+                if ancho_fill > 0:
+                    rx, ry, rh = r.x + int(bx * E), r.y + int(by * E), int(bh * E)
+                    pygame.draw.rect(pantalla, color, (rx, ry, ancho_fill, rh))
+                    pygame.draw.rect(pantalla, brillo, (rx, ry, ancho_fill, max(1, rh // 3)))
+
+                # Vida actual en número, debajo de la barra
+                txt_hp = FUENTE_EQUIPO.render(f"{hp_actual} / {hp_max}", True, NEGRO)
+                pantalla.blit(txt_hp, txt_hp.get_rect(midright=(r.x + int(74 * E), r.y + int(42 * E))))
             self._dibujar_boton_volver(pantalla)
 
         elif combate.turno == "fin":
@@ -557,7 +618,10 @@ class EscenaCombate:
         # Borde en el botón seleccionado (con flechas o con el mouse)
         zonas = self.zonas_navegables()
         if 0 <= self.seleccion < len(zonas):
-            dibujar_resalte(pantalla, zonas[self.seleccion][1])
+            # En el cambio de Pokémon la propia caja seleccionada ya marca la selección
+            es_equipo = combate.turno == "jugador" and combate.sub_menu == "cambiar" and isinstance(zonas[self.seleccion][0], tuple)
+            if not es_equipo:
+                dibujar_resalte(pantalla, zonas[self.seleccion][1])
         pos_mouse = pos_virtual(pygame.mouse.get_pos())
         for accion, rect in self.zonas_clic():
             if accion == "volver" and rect.collidepoint(pos_mouse):
