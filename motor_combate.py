@@ -59,6 +59,7 @@ class Combate:
         self.i_hp = self.hp_ia[self.i_nombre]
 
     def ejecutar_turno(self, index_habilidad):
+        # Turno del jugador
         if self.turno != "jugador":
             return
 
@@ -82,7 +83,7 @@ class Combate:
             elif mult == 0.0:
                 info_mult = " ¡No afecta!"
 
-            self.mensaje = f"¡{self.p_nombre.capitalize()} usó {nombre_hab}! Hizo {daño} daño (-{daño} HP).{info_mult}"
+            self.mensaje = f"¡{self.p_nombre.capitalize()} usó {nombre_hab}! Hizo {daño}.{info_mult}" # Mensaje de aviso de la eficacia del ataque
 
         self.actualizar_hp_actual()
 
@@ -122,6 +123,7 @@ class Combate:
         self.sub_menu = "principal"
 
     def turno_ia(self):
+        # Turno de la ia
         if self.turno != "ia":
             return
 
@@ -137,7 +139,7 @@ class Combate:
 
             self.eventos.append(("daño", "jugador", daño, mult))
 
-            self.mensaje = f"¡{self.i_nombre.capitalize()} rival usó {nombre_hab}! Hizo {daño} daño (-{daño} HP)."
+            self.mensaje = f"¡{self.i_nombre.capitalize()} rival usó {nombre_hab}! Hizo {daño}."    # Mensaje de aviso de la eficacia del ataque
 
         self.actualizar_hp_actual()
 

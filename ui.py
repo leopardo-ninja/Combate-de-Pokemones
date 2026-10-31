@@ -227,7 +227,7 @@ _CACHE_BARRA_MSJ = {}
 
 # Cajas del equipo (cambiar de pokemon)
 ESCALA_EQUIPO = 2.4                    # Tamaño de las cajas
-ORIGEN_EQUIPO = (900, 895)            # Esquina superior izquierda de la primera caja (x, y)
+ORIGEN_EQUIPO = (900, 895)             # Esquina superior izquierda de la primera caja (x, y)
 SEP_EQUIPO = 15                        # Espacio entre cajas
 TAM_EQUIPO = (int(78 * ESCALA_EQUIPO), int(49 * ESCALA_EQUIPO))
 BARRA_EQUIPO = (24, 33, 48, 3)         # Barra de vida dentro de la caja: x, y, ancho, alto (píxeles originales)
@@ -512,8 +512,8 @@ class EscenaCombate:
             pygame.draw.rect(pantalla, (20, 20, 30), (96, 796, 1728, 228), border_radius=16)
             pygame.draw.rect(pantalla, NEGRO, (100, 800, 1720, 220), border_radius=14)
             pygame.draw.rect(pantalla, GRIS_CLARO, (110, 810, 1700, 200), border_radius=10)
-        # Texto dentro de la zona blanca, en varias lineas si no cabe (sin pasar bajo los botones)
-        if not eligiendo_ataque:   # al elegir habilidad la barra queda sin mensaje
+        # Texto dentro de la zona blanca
+        if not (combate.turno == "jugador" and combate.sub_menu in ("luchar", "cambiar")):   # al elegir habilidad o Pokémon la barra queda sin mensaje
             lineas = [l.strip() for l in separar_texto_en_lineas(combate.mensaje, FUENTE, 1020) if l.strip()]
             alto_linea = FUENTE.get_linesize()
             y_txt = BARRA_MSJ_RECT.centery - len(lineas) * alto_linea // 2
