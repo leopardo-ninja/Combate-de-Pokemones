@@ -2,6 +2,7 @@
 import os
 import pygame
 
+import sonido
 from config import (
     ANCHO_VIRTUAL, ALTO_VIRTUAL, ANCHO_REAL, ALTO_REAL,
     BLANCO, NEGRO, GRIS_CLARO, GRIS_OSCURO, AZUL_DS, AZUL_OSCURO,
@@ -294,10 +295,16 @@ class EscenaCombate:
         self._contexto = None       # (turno, sub_menu) para reiniciar la selección al cambiar de menú
 
     def _procesar_eventos(self):
-        for tipo, objetivo, cantidad in self.combate.eventos:
+        for tipo, objetivo, cantidad, mult in self.combate.eventos:
             if tipo == "daño":
                 self.flash[objetivo] = 20
                 self.texto_flotante[objetivo] = (f"-{cantidad} HP", 45)
+                if mult >= 2.0:
+                    sonido.efecto("efectos/hit_super_effective")            # Efecto sonido golpe eficaz
+                elif mult <= 0.5 and mult > 0:
+                    sonido.efecto("efectos/hit_weak_not_very_effective")    # Efecto sonido golpe poco eficaz
+                elif mult > 0:
+                    sonido.efecto("efectos/hit_normal_damage")              # Efecto sonido golpe normal
         self.combate.eventos.clear()
 
     def _dibujar_sprite(self, pantalla, sprite, pos, quien):
@@ -465,6 +472,15 @@ class EscenaCombate:
         eligiendo_ataque = combate.turno == "jugador" and combate.sub_menu == "luchar"
         # La barra de mensajes se ve siempre, tambien al elegir habilidad
         barra = obtener_barra_mensaje(BARRA_MSJ_RECT.w, BARRA_MSJ_RECT.h)
+
+        en_peligro = (combate.turno != "fin"
+              and 0 < combate.p_hp <= combate.p_hp_max * 0.2)
+        
+        if en_peligro:      # Reproduce un sonido si la vida esta baja en bucle
+            sonido.loop("efectos/health_low_loop")
+        else:
+            sonido.parar_loop("efectos/health_low_loop")
+
         if barra:
             pantalla.blit(barra, BARRA_MSJ_RECT.topleft)
         else:   # respaldo si falta assets/ui/barra_mensaje.png

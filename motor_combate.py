@@ -72,7 +72,7 @@ class Combate:
             daño = int(potencia * mult)
             self.i_hp = max(0, self.i_hp - daño)
 
-            self.eventos.append(("daño", "ia", daño))
+            self.eventos.append(("daño", "ia", daño, mult))
 
             info_mult = ""
             if mult == 2.0:
@@ -135,7 +135,7 @@ class Combate:
             daño = int(potencia * mult)
             self.p_hp = max(0, self.p_hp - daño)
 
-            self.eventos.append(("daño", "jugador", daño))
+            self.eventos.append(("daño", "jugador", daño, mult))
 
             self.mensaje = f"¡{self.i_nombre.capitalize()} rival usó {nombre_hab}! Hizo {daño} daño (-{daño} HP)."
 

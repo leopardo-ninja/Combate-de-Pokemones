@@ -1,12 +1,17 @@
 import sys
 import pygame
 import ui
+import sonido
 
 from config import (
     ANCHO_VIRTUAL, ALTO_VIRTUAL, ANCHO_REAL, ALTO_REAL, MODO_VENTANA, AZUL_OSCURO,
 )
 from motor_combate import Combate
 from pokemons import SECCIONES_POKEMON, LISTA_PLANA_POKES
+
+
+def sonido_seleccion():
+    sonido.efecto("interfaz/select_1")     # Sonido al darle al seleccionar
 
 
 def tecla_a_accion(tecla, escena):
@@ -27,6 +32,8 @@ def aplicar_accion(accion, combate, modo_juego):
     """Ejecuta sobre el motor una acción de combate (venga del teclado o del mouse)."""
     if combate.turno != "jugador":
         return
+    if accion != "volver":
+        sonido_seleccion()
     if accion == "luchar":
         combate.sub_menu = "luchar"
     elif accion == "cambiar":
@@ -106,6 +113,7 @@ def main():
             elif evento.type == pygame.MOUSEBUTTONDOWN and estado_app == "arena":
                 if evento.button == 1:
                     if escena_arena.clic(evento.pos) == "continuar":
+                        sonido_seleccion()
                         modo_juego = escena_arena.modo
                         escenario_sel = escena_arena.escenario
                         estado_app = "seleccion"
@@ -143,6 +151,7 @@ def main():
                         estado_app = "menu_principal"
                         seleccion_idx = 0
                     elif evento.key == pygame.K_RETURN:
+                        sonido_seleccion()
                         if escena_arena.elegir() == "continuar":
                             modo_juego = escena_arena.modo
                             escenario_sel = escena_arena.escenario
@@ -162,6 +171,7 @@ def main():
                     elif evento.key == pygame.K_UP:
                         seleccion_idx = (seleccion_idx - 1) % limite
                     elif evento.key == pygame.K_RETURN:
+                        sonido_seleccion()
                         poke_elegido = LISTA_PLANA_POKES[seleccion_idx]
                         if poke_elegido not in equipo_seleccionado:
                             equipo_seleccionado.append(poke_elegido)
@@ -190,6 +200,7 @@ def main():
 
                 elif estado_app == "estadisticas":
                     if evento.key == pygame.K_RETURN or evento.key == pygame.K_SPACE:
+                        sonido_seleccion()
                         combate = Combate(equipo_seleccionado, modo_juego)
                         escena_combate = ui.EscenaCombate(combate, escenario_sel)
                         estado_app = "combate"
@@ -243,6 +254,7 @@ def main():
                                 lib_poke_idx -= 1
 
                         elif evento.key == pygame.K_RETURN:
+                            sonido_seleccion()
                             lib_detalle = True
                         elif evento.key == pygame.K_ESCAPE:
                             estado_app = "menu_principal"
@@ -256,6 +268,7 @@ def main():
             # --- Seleccion combate ---
             if accion_combate is not None:
                 if accion_combate == "menu":
+                    sonido_seleccion()
                     estado_app = "menu_principal"
                     seleccion_idx = 0
                 else:
@@ -263,6 +276,7 @@ def main():
 
         # --- Seleccion Menu ---
         if activar_opcion and estado_app == "menu_principal":
+            sonido_seleccion()
             if seleccion_idx == 0:
                 estado_app = "arena"
             elif seleccion_idx == 1:
@@ -275,6 +289,14 @@ def main():
                 ejecutando = False
 
         # ================= RENDERIZADO VISUAL RESPONSIVO =================
+        if estado_app != "combate":     # Detiene el sonido de vida baja si el combate acaba
+            sonido.parar_loop("efectos/health_low_loop")
+
+        if estado_app == "combate":
+            sonido.musica("musica/battle_1")
+        else: 
+            sonido.parar_musica()
+
         if estado_app == "menu_principal":
             ui.dibujar_menu_principal(pantalla, botones_menu, seleccion_idx)
 
