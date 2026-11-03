@@ -122,12 +122,13 @@ class Combate:
         self.turno = "ia"
         self.sub_menu = "principal"
 
-    def turno_ia(self):
-        # Turno de la ia
+    def turno_ia(self, hab=None):
+        # Turno de la ia (la interfaz puede elegir la habilidad antes, para animarla)
         if self.turno != "ia":
             return
 
-        hab = random.choice(self.i_data["habilidades"])
+        if hab is None:
+            hab = random.choice(self.i_data["habilidades"])
         nombre_hab, potencia, tipo_hab = hab
 
         if tipo_hab == "Estado":

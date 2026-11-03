@@ -1,3 +1,4 @@
+import random
 import sys
 import pygame
 import ui
@@ -28,9 +29,9 @@ def tecla_a_accion(tecla, escena):
     return None
 
 
-def aplicar_accion(accion, combate, modo_juego):
+def aplicar_accion(accion, combate, modo_juego, escena):
     """Ejecuta sobre el motor una acción de combate (venga del teclado o del mouse)."""
-    if combate.turno != "jugador":
+    if combate.turno != "jugador" or escena.ocupado():
         return
     if accion != "volver":
         sonido_seleccion()
@@ -46,7 +47,10 @@ def aplicar_accion(accion, combate, modo_juego):
     elif isinstance(accion, tuple):
         tipo, idx = accion
         if tipo == "habilidad":
-            combate.ejecutar_turno(idx)
+            hab = combate.p_data["habilidades"][idx]
+            # Se anima la habilidad y el motor aplica el daño justo al impactar
+            escena.lanzar_habilidad("jugador", hab, lambda: combate.ejecutar_turno(idx),
+                                    f"¡{combate.p_nombre.capitalize()} usó {hab[0]}!")
         elif tipo == "pokemon":
             combate.cambiar_pokemon_jugador(idx)
 
@@ -272,7 +276,7 @@ def main():
                     estado_app = "menu_principal"
                     seleccion_idx = 0
                 else:
-                    aplicar_accion(accion_combate, combate, modo_juego)
+                    aplicar_accion(accion_combate, combate, modo_juego, escena_combate)
 
         # --- Seleccion Menu ---
         if activar_opcion and estado_app == "menu_principal":
@@ -310,10 +314,13 @@ def main():
             ui.dibujar_estadisticas(pantalla, equipo_seleccionado)
 
         elif estado_app == "combate":
-            if combate.turno == "ia":
+            if combate.turno == "ia" and not escena_combate.ocupado():
                 retraso_ia += 1
                 if retraso_ia > 60:
-                    combate.turno_ia()
+                    hab_ia = random.choice(combate.i_data["habilidades"])
+                    escena_combate.lanzar_habilidad(
+                        "ia", hab_ia, lambda h=hab_ia: combate.turno_ia(h),
+                        f"¡{combate.i_nombre.capitalize()} rival usó {hab_ia[0]}!")
                     retraso_ia = 0
             escena_combate.dibujar(pantalla)
 

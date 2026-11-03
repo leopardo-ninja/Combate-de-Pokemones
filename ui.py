@@ -3,6 +3,7 @@ import os
 import pygame
 
 import sonido
+import efectos
 from config import (
     ANCHO_VIRTUAL, ALTO_VIRTUAL, ANCHO_REAL, ALTO_REAL,
     BLANCO, NEGRO, GRIS_CLARO, GRIS_OSCURO, AZUL_DS, AZUL_OSCURO,
@@ -315,9 +316,22 @@ class EscenaCombate:
         self.escenario = escenario  # índice en ESCENARIOS (fondo + bases)
         self.hp_visible = {}        # quien -> (nombre, hp mostrado) para animar el vaciado de la barra
         self.flash = {"ia": 0, "jugador": 0}
+        self.gestor = efectos.GestorEfectos()   # animaciones de las habilidades
         self.texto_flotante = {"ia": ("", 0), "jugador": ("", 0)}
         self.seleccion = 0          # botón resaltado (índice en zonas_navegables)
         self._contexto = None       # (turno, sub_menu) para reiniciar la selección al cambiar de menú
+
+    def ocupado(self):
+        """True mientras se reproduce la animación de una habilidad."""
+        return self.gestor.ocupado()
+
+    def lanzar_habilidad(self, quien, hab, al_impactar, mensaje=None):
+        """Anima la habilidad; 'al_impactar' (aplicar el daño en el motor) se llama en el golpe."""
+        nombre, _potencia, tipo = hab
+        if mensaje:
+            self.combate.mensaje = mensaje
+        self.combate.sub_menu = "principal"
+        self.gestor.lanzar(quien, nombre, tipo, al_impactar)
 
     def _procesar_eventos(self):
         for tipo, objetivo, cantidad, mult in self.combate.eventos:
@@ -476,6 +490,7 @@ class EscenaCombate:
         return None
 
     def dibujar(self, pantalla):
+        self.gestor.actualizar()
         self._procesar_eventos()
         self._sincronizar()
         combate = self.combate
@@ -486,8 +501,15 @@ class EscenaCombate:
         pantalla.blit(obtener_fondo_escenario(self.escenario), (0, 0))
         dibujar_bases(pantalla, self.escenario)
 
-        self._dibujar_sprite(pantalla, pokemon_ia, POS_POKEMON_IA, "ia") #Pokemon rival posicion
-        self._dibujar_sprite(pantalla, pokemon_jugador, POS_POKEMON_JUG, "jugador") #Pokemon aliado posicion
+        off_ia = self.gestor.desplazamiento("ia")
+        off_jug = self.gestor.desplazamiento("jugador")
+        pos_ia = (POS_POKEMON_IA[0] + off_ia[0], POS_POKEMON_IA[1] + off_ia[1])
+        pos_jug = (POS_POKEMON_JUG[0] + off_jug[0], POS_POKEMON_JUG[1] + off_jug[1])
+        self._dibujar_sprite(pantalla, pokemon_ia, pos_ia, "ia") #Pokemon rival posicion
+        self._dibujar_sprite(pantalla, pokemon_jugador, pos_jug, "jugador") #Pokemon aliado posicion
+        # Efectos de las habilidades (baldosas de stats sobre la silueta y partículas)
+        self.gestor.dibujar_sobre_sprites(pantalla, {"ia": (pokemon_ia, pos_ia), "jugador": (pokemon_jugador, pos_jug)})
+        self.gestor.dibujar(pantalla)
         self._dibujar_texto_flotante(pantalla, "ia", 1360, 150)
         self._dibujar_texto_flotante(pantalla, "jugador", 500, 470)
 
@@ -521,7 +543,7 @@ class EscenaCombate:
                 pantalla.blit(FUENTE.render(l, True, NEGRO), (BARRA_MSJ_RECT.x + 80, y_txt))
                 y_txt += alto_linea
 
-        if combate.turno == "jugador" and combate.sub_menu == "principal":
+        if combate.turno == "jugador" and combate.sub_menu == "principal" and not self.gestor.ocupado():
             # Texto boton LUCHAR
             pygame.draw.rect(pantalla, ROJO_BOTON, RECT_LUCHAR, border_radius=12)
             pygame.draw.rect(pantalla, NEGRO, RECT_LUCHAR, 3, border_radius=12)
@@ -617,7 +639,7 @@ class EscenaCombate:
 
         # Borde en el botón seleccionado (con flechas o con el mouse)
         zonas = self.zonas_navegables()
-        if 0 <= self.seleccion < len(zonas):
+        if 0 <= self.seleccion < len(zonas) and not self.gestor.ocupado():
             # En el cambio de Pokémon la propia caja seleccionada ya marca la selección
             es_equipo = combate.turno == "jugador" and combate.sub_menu == "cambiar" and isinstance(zonas[self.seleccion][0], tuple)
             if not es_equipo:

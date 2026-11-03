@@ -33,7 +33,7 @@ CATALOGO_POKEMONS = {
     "magmar": {
         "tipo": "Fuego", "hp": 140, "ataque": 95, "defensa": 57, "atk_esp": 100, "def_esp": 85, "velocidad": 93,
         "desc": "Habita inmerso en las profundidades de los cráteres volcánicos. Su temperatura corporal alcanza niveles extremos capaces de fundir la roca.",
-        "habilidades": [("Puño Certero", 50, "Normal"), ("Puño Fuego", 70, "Fuego"), ("Magmatormenta", 120, "Fuego"), ("Malicioso", 0, "Estado")]
+        "habilidades": [("Puño Certero", 50, "Normal"), ("Puño Fuego", 70, "Fuego"), ("Llamarada", 120, "Fuego"), ("Malicioso", 0, "Estado")]
     },
     "squirtle": {
         "tipo": "Agua", "hp": 125, "ataque": 48, "defensa": 65, "atk_esp": 50, "def_esp": 64, "velocidad": 43,
