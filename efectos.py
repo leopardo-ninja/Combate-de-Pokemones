@@ -370,21 +370,29 @@ def construir(nombre, tipo, atacante):
     # ---------- FUEGO ----------
     if nombre == "Lanzallamas":
         return proyectil(punto_salida, destino, (38, 39, 40), cantidad=9, escala=4, duracion=22, separacion_frames=3, spread=24, ids_impacto=(43,), escala_impacto=3, aditivo=False)
+    
     if nombre == "Ascuas":
         return proyectil(punto_salida, destino, (57, 58, 38), cantidad=6, escala=4, duracion=22, separacion_frames=5, spread=40, ids_impacto=(58,), escala_impacto=5)
+    
     if nombre == "Giro Fuego":
         return {"elementos": [Orbita((38, 39, 40), destino, 0, 40, cantidad = 8, radio_inicial = 260, radio_final = 30, escala = 4), Flash(40, 10, (255, 150, 60), 90)],"impacto": 40, "sacude": 6}
+    
     if nombre == "Colmillo Ígneo":
         return contacto(origen, destino, (43,), escala = 3, extra = [Particula((142,), 4, 18, destino, destino, escala = 2.5, escala_fin = 3), _impacto(destino, (46,), 14, escala = 6)], sacude = 10)
+    
     if nombre == "Rueda Fuego":
         return proyectil(punto_salida, destino, (39, 40), cantidad = 1, escala = 7, duracion = 26, altura_arco = 120, ids_impacto = (46, 47), escala_impacto = 6, giro_por_frame = 0, sacude = 10, extra = 
                          [Particula((58,), 2, 24, punto_salida, destino, escala = 4, altura_arco = 120, alpha_fin = 0)])
+    
     if nombre == "Nitrocarga":
         return contacto(origen, destino, (46, 47), escala = 2, sacude = 12, extra = [Particula((23,), 0, 12, origen, destino, escala = 2)])
+    
     if nombre == "Envite Ígneo":
-        return contacto(origen, destino, (47, 46), escala = 3, sacude = 3, extra = [Particula((23,), 0, 14, origen, destino, escala = 3), Flash(12, 14, (255, 180, 80), 120)], frame_impacto = 14)
+        return contacto(origen, destino, (44, 44), escala = 5, sacude = 3, extra = [Particula((23,), 0, 14, origen, destino, escala = 3), Flash(12, 14, (255, 180, 80), 120)], frame_impacto = 12)
+    
     if nombre == "Puño Fuego":
         return contacto(origen, destino, (46,), escala = 3, sacude = 12, extra = [Particula((189,), 4, 14, destino, destino, escala = 2, escala_fin = 3, tinte = (255, 70, 50)), _impacto(destino, (43,), 12, escala = 2.5)])
+    
     if nombre == "Llamarada":
         # Círculo de fuego (el mismo anillo de Giro Fuego) que viaja desde el atacante hasta el rival
         llegada = 30
@@ -476,8 +484,8 @@ def construir(nombre, tipo, atacante):
                        _impacto(destino, (233, 205), 48, escala=9), Flash(48, 14, (255, 255, 180), 180)],
                 "impacto": 48, "sacude": 18}
     if nombre == "Autodestrucción":
-        return {"elementos": [Flash(0, 20, (255, 255, 255), 255), _impacto(origen, (46, 47), 4, escala=11, escala_fin=15, duracion=30),
-                       _impacto(destino, (233,), 10, escala=8, duracion=16), Anillo(origen, 4, 30, 30, 520, (255, 220, 120), 16)],
+        return {"elementos": [Flash(0, 20, (255, 255, 255), 255), _impacto(origen, (44,), 4, escala = 10, escala_fin = 8, duracion = 30),
+                       _impacto(destino, (233,), 10, escala = 6, duracion = 16), Anillo(origen, 4, 30, 30, 520, (255, 220, 120), 16)],
                 "impacto": 8, "sacude": 24}
     if nombre == "Puño Trueno":
         return contacto(origen, destino, (233,), escala=7, sacude=12,
