@@ -6,6 +6,7 @@ import pygame
 pygame.init()
 pygame.font.init()
 
+# True = ventana de 1280x720 (cómodo para probar). False = pantalla completa
 MODO_VENTANA = False
 
 # Resolución Virtual de Referencia
@@ -15,6 +16,7 @@ ANCHO_VIRTUAL, ALTO_VIRTUAL = 1920, 1080
 if MODO_VENTANA:
     ANCHO_REAL, ALTO_REAL = 1280, 720
 else:
+    # En pantalla completa se usa la resolución real del monitor
     _info_pantalla = pygame.display.Info()
     ANCHO_REAL, ALTO_REAL = _info_pantalla.current_w, _info_pantalla.current_h
 
@@ -42,6 +44,7 @@ COLORES_TIPO = {
 }
 
 # Fuentes Escaladas
+# Misma fuente pixelada en 4 tamaños: normal, chica, grande y la usada en los nombres de habilidades
 RUTA_FUENTE = "assets/fuentes/PixelifySans-Bold.ttf"
 FUENTE = pygame.font.Font(RUTA_FUENTE, 26)
 FUENTE_CHICA = pygame.font.Font(RUTA_FUENTE, 20)

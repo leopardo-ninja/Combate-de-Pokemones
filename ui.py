@@ -1,4 +1,4 @@
-# ----------------- Parte Visual del Progreama -----------------
+# ----------------- Parte Visual del Programa -----------------
 import os
 import pygame
 
@@ -15,26 +15,31 @@ from escenarios import ESCENARIOS
 
 
 # ----------------- UTILIDADES -----------------
-_CACHE_SPRITES = {}
+# Caché de imágenes de pokémons ya cargadas y escaladas, para no leer el disco en cada frame
+_CACHE_POKEMONS = {}
 
 
-def obtener_sprite(nombre, vista, tamaño, color_respaldo=None):
+def obtener_pokemon(nombre, vista, tamaño, color_respaldo=None):
     #Cargar las imagenes de los pokemons
+    # La clave identifica la imagen: nombre del Pokémon, vista ("frente" o "espalda") y tamaño
     clave = (nombre, vista, tamaño)
-    if clave not in _CACHE_SPRITES:
+    if clave not in _CACHE_POKEMONS:
         ruta = f"assets/pokemons/{vista}/{nombre}.png"
+        # Si existe el PNG se carga y se escala al tamaño pedido
         if os.path.exists(ruta):
             img = pygame.image.load(ruta).convert_alpha()
-            _CACHE_SPRITES[clave] = pygame.transform.scale(img, tamaño)
+            _CACHE_POKEMONS[clave] = pygame.transform.scale(img, tamaño)
+        # Si falta el PNG y se dio un color de respaldo, se usa un cuadro de ese color
         elif color_respaldo is not None:
             superficie = pygame.Surface(tamaño)
             superficie.fill(color_respaldo)
-            _CACHE_SPRITES[clave] = superficie
+            _CACHE_POKEMONS[clave] = superficie
         else:
-            _CACHE_SPRITES[clave] = None
-    return _CACHE_SPRITES[clave]
+            _CACHE_POKEMONS[clave] = None
+    return _CACHE_POKEMONS[clave]
 
 
+# Caché de los fondos ya preparados
 _CACHE_FONDOS = {}
 
 
@@ -45,15 +50,17 @@ def obtener_fondo(indice):
         if not os.path.exists(ruta):
             _CACHE_FONDOS[indice] = None
         else:
-            recorte = pygame.image.load(ruta).convert_alpha()
-            grande = pygame.transform.scale(recorte, (1920, 888))
+            imagen_original = pygame.image.load(ruta).convert_alpha()
+            imagen_grande = pygame.transform.scale(imagen_original, (1920, 888))
+            # Lienzo del tamaño de la pantalla: se rellena con el color de la esquina inferior derecha y se pega encima la imagen agrandada, así no quedan bordes vacíos
             fondo = pygame.Surface((ANCHO_VIRTUAL, ALTO_VIRTUAL))
-            fondo.fill(tuple(recorte.get_at((recorte.get_width() - 1, recorte.get_height() - 1)))[:3])
-            fondo.blit(grande, (0, -72))
+            fondo.fill(tuple(imagen_original.get_at((imagen_original.get_width() - 1, imagen_original.get_height() - 1)))[:3])
+            fondo.blit(imagen_grande, (0, -72))
             _CACHE_FONDOS[indice] = fondo
     return _CACHE_FONDOS[indice]
 
 
+# Convierte la posición del mouse de la pantalla real a la virtual (1920x1080), porque todo se dibuja en la virtual y luego se escala
 def pos_virtual(pos):
     #Posicion del mouse
     return (int(pos[0] * ANCHO_VIRTUAL / ANCHO_REAL), int(pos[1] * ALTO_VIRTUAL / ALTO_REAL))
@@ -70,12 +77,15 @@ def dibujar_resalte(pantalla, rect, radio=12):
     pygame.draw.rect(pantalla, COLOR_RESALTE, rect.inflate(4, 4), 4, border_radius=radio)
 
 
+# Parte un texto largo en líneas que quepan en max_ancho píxeles (para mensajes y descripciones)
 def separar_texto_en_lineas(texto, fuente, max_ancho):
+    # Se arma cada línea palabra por palabra
     palabras = texto.split(" ")
     lineas = []
     linea_actual = ""
     for palabra in palabras:
         prueba = linea_actual + palabra + " "
+        # Si la palabra cabe, se añade a la línea; si no, se cierra la línea y se empieza otra
         if fuente.size(prueba)[0] < max_ancho:
             linea_actual = prueba
         else:
@@ -98,6 +108,7 @@ class Boton:
 
     def dibujar(self, superficie, resaltado=False):
         color = BLANCO
+        # Fondo azul con borde blanco; si el botón está resaltado se añade el borde doble del resalte
         pygame.draw.rect(superficie, AZUL_OSCURO, self.rect, border_radius=12)
         pygame.draw.rect(superficie, color, self.rect, 4, border_radius=12)
         if resaltado:
@@ -107,6 +118,7 @@ class Boton:
 
 
 # ----------------- COMBATE -----------------
+# Paleta de colores por tipo de Pokémon (se usa como respaldo si falta alguna imagen del combate)
 TEMAS_TIPO_COMBATE = {
     "Fuego": {"fondo_top": (70, 25, 15), "fondo_bot": (35, 12, 8), "suelo_rival": (110, 45, 25), "suelo_jug": (130, 55, 30), "principal": (235, 100, 40)},
     "Agua": {"fondo_top": (15, 40, 75), "fondo_bot": (8, 20, 40), "suelo_rival": (30, 80, 130), "suelo_jug": (40, 100, 160), "principal": (40, 130, 235)},
@@ -130,6 +142,7 @@ ESCALA_CAJA = 1.5 #Dimesion
 BARRA_CAJA = {"rival": (93, 40, 211, 49), "jugador": (116, 40, 233, 49)}        #Barra de vida
 POS_CAJA = {"rival": (600, 100), "jugador": (1200, 650)}                        #Posicion caja de vida
 
+# Cachés de imágenes ya preparadas: bases, cajas de vida, fondos de escenario y miniaturas
 _CACHE_BASES = {}
 _CACHE_CAJAS = {}
 _CACHE_ESCENARIOS = {}
@@ -164,19 +177,22 @@ def obtener_caja(lado):
 def obtener_fondo_escenario(indice):
     #Fondo del escenario: usa fondos.png si el escenario tiene uno asignado; si no, un degradado
     if indice not in _CACHE_ESCENARIOS:
-        esc = ESCENARIOS[indice]
+        datos_escenario = ESCENARIOS[indice]
         fondo = None
-        if esc["fondo"] is not None:
-            fondo = obtener_fondo(esc["fondo"])
+        # Si el escenario tiene imagen de fondo se usa esa
+        if datos_escenario["fondo"] is not None:
+            fondo = obtener_fondo(datos_escenario["fondo"])
+        # Si no hay imagen, se dibuja un degradado de cielo y un rectángulo de suelo bajo el horizonte
         if fondo is None:
             fondo = pygame.Surface((ANCHO_VIRTUAL, ALTO_VIRTUAL))
-            arriba, abajo = esc["cielo"]
+            color_arriba, color_abajo = datos_escenario["cielo"]
             horizonte = 640
+            # Cada línea horizontal mezcla color_arriba y color_abajo según su altura (fraccion va de 0 a 1)
             for y in range(horizonte):
-                t = y / horizonte
-                color = tuple(int(arriba[i] + (abajo[i] - arriba[i]) * t) for i in range(3))
+                fraccion = y / horizonte
+                color = tuple(int(color_arriba[i] + (color_abajo[i] - color_arriba[i]) * fraccion) for i in range(3))
                 pygame.draw.line(fondo, color, (0, y), (ANCHO_VIRTUAL, y))
-            pygame.draw.rect(fondo, esc["suelo"], (0, horizonte, ANCHO_VIRTUAL, ALTO_VIRTUAL - horizonte))
+            pygame.draw.rect(fondo, datos_escenario["suelo"], (0, horizonte, ANCHO_VIRTUAL, ALTO_VIRTUAL - horizonte))
         _CACHE_ESCENARIOS[indice] = fondo
     return _CACHE_ESCENARIOS[indice]
 
@@ -241,27 +257,31 @@ def obtener_barra_mensaje(ancho, alto):
     proporcion y solo se estira el centro blanco, asi los bordes no se deforman ni se difuminan."""
     clave = (ancho, alto)
     if clave not in _CACHE_BARRA_MSJ:
+        # Sin la imagen devuelve None (entonces se dibuja una barra de respaldo)
         if not os.path.exists(RUTA_BARRA_MSJ):
             _CACHE_BARRA_MSJ[clave] = None
             return None
         img = pygame.image.load(RUTA_BARRA_MSJ).convert_alpha()
-        w, h = img.get_size()
+        ancho_original, alto_original = img.get_size()
         # Esquinas claras de 1 px que sobran en la imagen: se hacen transparentes
-        for (cx, cy) in ((0, 0), (1, 0), (0, 1), (w - 1, 0), (w - 2, 0), (w - 1, 1),
-                         (0, h - 1), (1, h - 1), (0, h - 2), (w - 1, h - 1), (w - 2, h - 1), (w - 1, h - 2)):
-            if img.get_at((cx, cy))[:3] != (74, 66, 66):
-                img.set_at((cx, cy), (0, 0, 0, 0))
-        esc = alto / h
-        cap_i = round(BARRA_MSJ_CAP_IZQ * esc)
-        cap_d = round(BARRA_MSJ_CAP_DER * esc)
-        izq = pygame.transform.scale(img.subsurface((0, 0, BARRA_MSJ_CAP_IZQ, h)), (cap_i, alto))
-        der = pygame.transform.scale(img.subsurface((w - BARRA_MSJ_CAP_DER, 0, BARRA_MSJ_CAP_DER, h)), (cap_d, alto))
-        centro = pygame.transform.scale(img.subsurface((BARRA_MSJ_CAP_IZQ, 0, w - BARRA_MSJ_CAP_IZQ - BARRA_MSJ_CAP_DER, h)),
-                                        (ancho - cap_i - cap_d, alto))
+        for (x_esquina, y_esquina) in ((0, 0), (1, 0), (0, 1), (ancho_original - 1, 0), (ancho_original - 2, 0), (ancho_original - 1, 1),
+                         (0, alto_original - 1), (1, alto_original - 1), (0, alto_original - 2), (ancho_original - 1, alto_original - 1), (ancho_original - 2, alto_original - 1), (ancho_original - 1, alto_original - 2)):
+            if img.get_at((x_esquina, y_esquina))[:3] != (74, 66, 66):
+                img.set_at((x_esquina, y_esquina), (0, 0, 0, 0))
+        # Cuánto se agranda la altura; los extremos usan el mismo factor para no deformarse
+        factor_escala = alto / alto_original
+        borde_izq = round(BARRA_MSJ_CAP_IZQ * factor_escala)
+        borde_der = round(BARRA_MSJ_CAP_DER * factor_escala)
+        # Se escalan por separado el extremo izquierdo, el derecho y el centro (solo el centro se estira a lo ancho)
+        parte_izq = pygame.transform.scale(img.subsurface((0, 0, BARRA_MSJ_CAP_IZQ, alto_original)), (borde_izq, alto))
+        parte_der = pygame.transform.scale(img.subsurface((ancho_original - BARRA_MSJ_CAP_DER, 0, BARRA_MSJ_CAP_DER, alto_original)), (borde_der, alto))
+        parte_centro = pygame.transform.scale(img.subsurface((BARRA_MSJ_CAP_IZQ, 0, ancho_original - BARRA_MSJ_CAP_IZQ - BARRA_MSJ_CAP_DER, alto_original)),
+                                        (ancho - borde_izq - borde_der, alto))
+        # Se pegan las tres partes en una superficie transparente
         barra = pygame.Surface((ancho, alto), pygame.SRCALPHA)
-        barra.blit(izq, (0, 0))
-        barra.blit(centro, (cap_i, 0))
-        barra.blit(der, (ancho - cap_d, 0))
+        barra.blit(parte_izq, (0, 0))
+        barra.blit(parte_centro, (borde_izq, 0))
+        barra.blit(parte_der, (ancho - borde_der, 0))
         _CACHE_BARRA_MSJ[clave] = barra
     return _CACHE_BARRA_MSJ[clave]
 
@@ -272,6 +292,7 @@ CAJA_POR_TIPO = {"Normal": "normal", "Fuego": "fire", "Agua": "water", "Planta":
 _CACHE_ATAQUES = {}
 
 
+# Imagen de la caja de ataque según el tipo de la habilidad (usa la de Normal si el tipo no está en la tabla)
 def obtener_caja_ataque(tipo):
     clave = CAJA_POR_TIPO.get(tipo, "normal")
     if clave not in _CACHE_ATAQUES:
@@ -305,6 +326,7 @@ def obtener_caja_equipo(seleccionada, apagada=False):
     return _CACHE_EQUIPO[clave]
 
 
+# Rectángulo en pantalla de la caja del Pokémon número idx del equipo (las cajas van en fila)
 def rect_pokemon(idx):
     return pygame.Rect(ORIGEN_EQUIPO[0] + idx * (TAM_EQUIPO[0] + SEP_EQUIPO), ORIGEN_EQUIPO[1], TAM_EQUIPO[0], TAM_EQUIPO[1])
 
@@ -312,11 +334,14 @@ def rect_pokemon(idx):
 class EscenaCombate:
     
     def __init__(self, combate, escenario=0):
+        # Motor de combate (la lógica) que esta escena dibuja
         self.combate = combate
         self.escenario = escenario  # índice en ESCENARIOS (fondo + bases)
         self.hp_visible = {}        # quien -> (nombre, hp mostrado) para animar el vaciado de la barra
+        # Frames que le quedan al parpadeo blanco de cada lado cuando recibe daño
         self.flash = {"ia": 0, "jugador": 0}
         self.gestor = efectos.GestorEfectos()   # animaciones de las habilidades
+        # Texto de daño que sube sobre cada Pokémon: (texto, frames restantes)
         self.texto_flotante = {"ia": ("", 0), "jugador": ("", 0)}
         self.seleccion = 0          # botón resaltado (índice en zonas_navegables)
         self._contexto = None       # (turno, sub_menu) para reiniciar la selección al cambiar de menú
@@ -325,37 +350,40 @@ class EscenaCombate:
         """True mientras se reproduce la animación de una habilidad."""
         return self.gestor.ocupado()
 
-    def lanzar_habilidad(self, quien, hab, al_impactar, mensaje=None):
+    def lanzar_habilidad(self, quien, habilidad, al_impactar, mensaje=None):
         """Anima la habilidad; 'al_impactar' (aplicar el daño en el motor) se llama en el golpe."""
-        nombre, _potencia, tipo = hab
+        nombre, _potencia, tipo = habilidad
         if mensaje:
             self.combate.mensaje = mensaje
         self.combate.sub_menu = "principal"
         self.gestor.lanzar(quien, nombre, tipo, al_impactar)
 
+    # Lee los eventos que dejó el motor (daño recibido): activa parpadeo, texto flotante y sonido según la eficacia, y los borra
     def _procesar_eventos(self):
-        for tipo, objetivo, cantidad, mult in self.combate.eventos:
+        for tipo, objetivo, cantidad, multiplicador in self.combate.eventos:
             if tipo == "daño":
                 self.flash[objetivo] = 20
                 self.texto_flotante[objetivo] = (f"-{cantidad} HP", 45)
-                if mult >= 2.0:
+                if multiplicador >= 2.0:
                     sonido.efecto("efectos/hit_super_effective")            # Efecto sonido golpe eficaz
-                elif mult <= 0.5 and mult > 0:
+                elif multiplicador <= 0.5 and multiplicador > 0:
                     sonido.efecto("efectos/hit_weak_not_very_effective")    # Efecto sonido golpe poco eficaz
-                elif mult > 0:
+                elif multiplicador > 0:
                     sonido.efecto("efectos/hit_normal_damage")              # Efecto sonido golpe normal
         self.combate.eventos.clear()
 
-    def _dibujar_sprite(self, pantalla, sprite, pos, quien):
+    # Dibuja un Pokémon; si acaba de recibir daño parpadea, alternando con una copia blanca cada 4 frames
+    def _dibujar_pokemon(self, pantalla, imagen_pokemon, pos, quien):
         if self.flash[quien] > 0:
             self.flash[quien] -= 1
             if (self.flash[quien] // 4) % 2 == 0:
-                destello = sprite.copy()
+                destello = imagen_pokemon.copy()
                 destello.fill((255, 255, 255, 180), special_flags=pygame.BLEND_RGBA_ADD)
                 pantalla.blit(destello, pos)
                 return
-        pantalla.blit(sprite, pos)
+        pantalla.blit(imagen_pokemon, pos)
 
+    # Dibuja el texto de daño subiendo poco a poco mientras dura su contador
     def _dibujar_texto_flotante(self, pantalla, quien, x, y_base):
         texto, timer = self.texto_flotante[quien]
         if timer > 0:
@@ -378,6 +406,7 @@ class EscenaCombate:
             valor = hp
         else:
             valor = guardado[1]
+            # Velocidad de la animación: la barra tarda unos 90 frames en vaciarse
             paso = max(0.5, hp_max / 90)
             if valor > hp:
                 valor = max(hp, valor - paso)
@@ -390,41 +419,45 @@ class EscenaCombate:
     def _dibujar_caja_vida(self, pantalla, lado, nombre, hp, hp_max, mostrar_numeros):
         caja = obtener_caja(lado)
         quien = "ia" if lado == "rival" else "jugador"
-        px, py = POS_CAJA[lado]
+        # Posición en pantalla de la caja de este lado ("rival" o "jugador")
+        caja_x, caja_y = POS_CAJA[lado]
         if caja is None:
             return
-        pantalla.blit(caja, (px, py))
+        pantalla.blit(caja, (caja_x, caja_y))
 
         # Nombre y nivel en la parte superior de la caja
-        ox, oy = OFFSET_NOMBRE[lado]
+        desfase_x, desfase_y = OFFSET_NOMBRE[lado]
         txt_nombre = FUENTE.render(nombre.capitalize(), True, NEGRO)
-        pantalla.blit(txt_nombre, (px + int(ox * ESCALA_CAJA), py + int(oy * ESCALA_CAJA)))
+        pantalla.blit(txt_nombre, (caja_x + int(desfase_x * ESCALA_CAJA), caja_y + int(desfase_y * ESCALA_CAJA)))
         #txt_lvl = FUENTE.render("Lv.70", True, NEGRO)
-        #pantalla.blit(txt_lvl, (px + caja.get_width() - txt_lvl.get_width() - int(26 * ESCALA_CAJA), py + int(5 * ESCALA_CAJA)))
+        #pantalla.blit(txt_lvl, (caja_x + caja.get_width() - txt_lvl.get_width() - int(26 * ESCALA_CAJA), caja_y + int(5 * ESCALA_CAJA)))
 
         # Barra de vida (se pinta sobre la pista blanca de la imagen)
-        bx0, by0, bx1, by1 = BARRA_CAJA[lado]
-        rx = px + int(bx0 * ESCALA_CAJA)
-        ry = py + int(by0 * ESCALA_CAJA)
-        rw = int((bx1 - bx0 + 1) * ESCALA_CAJA)
-        rh = int((by1 - by0 + 1) * ESCALA_CAJA)
-        visible = self._hp_visible(quien, nombre, hp, hp_max)
-        proporcion = max(0.0, min(1.0, visible / hp_max))
+        barra_x0, barra_y0, barra_x1, barra_y1 = BARRA_CAJA[lado]
+        barra_x = caja_x + int(barra_x0 * ESCALA_CAJA)
+        barra_y = caja_y + int(barra_y0 * ESCALA_CAJA)
+        barra_ancho = int((barra_x1 - barra_x0 + 1) * ESCALA_CAJA)
+        barra_alto = int((barra_y1 - barra_y0 + 1) * ESCALA_CAJA)
+        hp_mostrado = self._hp_visible(quien, nombre, hp, hp_max)
+        proporcion = max(0.0, min(1.0, hp_mostrado / hp_max))
+        # Color de la barra según la vida restante: verde si queda más del 50%, amarillo más del 20%, rojo el resto
         if proporcion > 0.5:
             color, brillo = (72, 200, 112), (150, 235, 170)
         elif proporcion > 0.2:
             color, brillo = (240, 200, 48), (255, 235, 130)
         else:
             color, brillo = (232, 64, 48), (255, 140, 120)
-        ancho = int(rw * proporcion)
+        ancho = int(barra_ancho * proporcion)
+        # Se dibuja la barra y, encima, una franja más clara para dar brillo
         if ancho > 0:
-            pygame.draw.rect(pantalla, color, (rx, ry, ancho, rh), border_radius=4)
-            pygame.draw.rect(pantalla, brillo, (rx + 2, ry + 2, max(0, ancho - 4), max(1, rh // 3)), border_radius=3)
+            pygame.draw.rect(pantalla, color, (barra_x, barra_y, ancho, barra_alto), border_radius=4)
+            pygame.draw.rect(pantalla, brillo, (barra_x + 2, barra_y + 2, max(0, ancho - 4), max(1, barra_alto // 3)), border_radius=3)
 
+        # Solo la caja del jugador muestra la vida en números
         if mostrar_numeros:
             txt_hp = FUENTE_CHICA.render(f"{hp} / {hp_max}", True, NEGRO)
-            x_num = px + int((bx0 + 120) * ESCALA_CAJA)   # borde derecho del texto
-            y_num = py + int((by0 + 20) * ESCALA_CAJA)    # borde superior del texto
+            x_num = caja_x + int((barra_x0 + 120) * ESCALA_CAJA)   # borde derecho del texto
+            y_num = caja_y + int((barra_y0 + 20) * ESCALA_CAJA)    # borde superior del texto
             pantalla.blit(txt_hp, (x_num - txt_hp.get_width(), y_num))
 
     def zonas_navegables(self):
@@ -434,16 +467,16 @@ class EscenaCombate:
     def mover_seleccion(self, tecla):
         """Mueve el botón resaltado con las flechas."""
         self._sincronizar()
-        n = len(self.zonas_navegables())
-        if n <= 1:
+        cantidad_botones = len(self.zonas_navegables())
+        if cantidad_botones <= 1:
             return
-        c = self.combate
         # Botones y habilidades van en una sola fila
         paso = 1 if tecla in (pygame.K_RIGHT, pygame.K_DOWN) else -1
-        self.seleccion = (self.seleccion + paso) % n
+        # Con el módulo la selección da la vuelta de un extremo al otro
+        self.seleccion = (self.seleccion + paso) % cantidad_botones
 
     def accion_seleccionada(self):
-        # Reactividad del bonton al hover
+        # Devuelve la acción del botón resaltado (la que ejecuta ENTER)
         self._sincronizar()
         zonas = self.zonas_navegables()
         if 0 <= self.seleccion < len(zonas):
@@ -458,6 +491,7 @@ class EscenaCombate:
             if rect.collidepoint(pos):
                 self.seleccion = i
 
+    # Dibuja el botón gris VOLVER de los submenús
     def _dibujar_boton_volver(self, pantalla):
         pygame.draw.rect(pantalla, GRIS_OSCURO, RECT_VOLVER, border_radius=12)
         pygame.draw.rect(pantalla, NEGRO, RECT_VOLVER, 3, border_radius=12)
@@ -466,17 +500,21 @@ class EscenaCombate:
 
     def zonas_clic(self):
         # Zonas interactuables
-        c = self.combate
-        if c.turno == "fin":
+        combate = self.combate
+        # Combate terminado: solo queda el botón MENU
+        if combate.turno == "fin":
             return [("menu", RECT_MENU_FIN)]
-        if c.turno != "jugador":
+        # Mientras juega el rival no hay botones
+        if combate.turno != "jugador":
             return []
-        if c.sub_menu == "principal":
+        # Menú principal: LUCHAR y CAMBIAR
+        if combate.sub_menu == "principal":
             return [("luchar", RECT_LUCHAR), ("cambiar", RECT_CAMBIAR)]
-        if c.sub_menu == "luchar":
-            zonas = [(("habilidad", i), rect_habilidad(i)) for i in range(len(c.p_data["habilidades"]))]
-        elif c.sub_menu == "cambiar":
-            zonas = [(("pokemon", i), rect_pokemon(i)) for i in range(len(c.eq_jugador))]
+        # Submenús: una zona por habilidad o por Pokémon del equipo, más VOLVER (cada zona es (acción, rectángulo))
+        if combate.sub_menu == "luchar":
+            zonas = [(("habilidad", i), rect_habilidad(i)) for i in range(len(combate.datos_jugador["habilidades"]))]
+        elif combate.sub_menu == "cambiar":
+            zonas = [(("pokemon", i), rect_pokemon(i)) for i in range(len(combate.equipo_jugador))]
         else:
             return []
         return zonas + [("volver", RECT_VOLVER)]
@@ -489,45 +527,53 @@ class EscenaCombate:
                 return accion
         return None
 
+    # Dibuja un frame completo del combate. Orden: fondo y bases, pokémons, efectos, cajas de vida, barra de mensajes y botones
     def dibujar(self, pantalla):
+        # Avanza un frame la animación activa y procesa el daño recién ocurrido
         self.gestor.actualizar()
         self._procesar_eventos()
         self._sincronizar()
         combate = self.combate
-        tema = TEMAS_TIPO_COMBATE.get(combate.p_data["tipo"], TEMAS_TIPO_COMBATE["Fuego"])
-        pokemon_ia = obtener_sprite(combate.i_nombre, "frente", (500, 500), (200, 50, 50))           #Pokemon rival tamano
-        pokemon_jugador = obtener_sprite(combate.p_nombre, "espalda", (680, 680), (50, 100, 200))    #Pokemon aliado tamano
+        tema = TEMAS_TIPO_COMBATE.get(combate.datos_jugador["tipo"], TEMAS_TIPO_COMBATE["Fuego"])
+        pokemon_ia = obtener_pokemon(combate.nombre_ia, "frente", (500, 500), (200, 50, 50))           #Pokemon rival tamano
+        pokemon_jugador = obtener_pokemon(combate.nombre_jugador, "espalda", (680, 680), (50, 100, 200))    #Pokemon aliado tamano
 
+        # Fondo y bases del escenario elegido
         pantalla.blit(obtener_fondo_escenario(self.escenario), (0, 0))
         dibujar_bases(pantalla, self.escenario)
 
-        off_ia = self.gestor.desplazamiento("ia")
-        off_jug = self.gestor.desplazamiento("jugador")
-        pos_ia = (POS_POKEMON_IA[0] + off_ia[0], POS_POKEMON_IA[1] + off_ia[1])
-        pos_jug = (POS_POKEMON_JUG[0] + off_jug[0], POS_POKEMON_JUG[1] + off_jug[1])
-        self._dibujar_sprite(pantalla, pokemon_ia, pos_ia, "ia") #Pokemon rival posicion
-        self._dibujar_sprite(pantalla, pokemon_jugador, pos_jug, "jugador") #Pokemon aliado posicion
+        # Cuánto se mueve cada Pokémon durante la animación (embestida, sacudida...) y su posición final
+        desplazamiento_ia = self.gestor.desplazamiento("ia")
+        desplazamiento_jugador = self.gestor.desplazamiento("jugador")
+        pos_ia = (POS_POKEMON_IA[0] + desplazamiento_ia[0], POS_POKEMON_IA[1] + desplazamiento_ia[1])
+        pos_jug = (POS_POKEMON_JUG[0] + desplazamiento_jugador[0], POS_POKEMON_JUG[1] + desplazamiento_jugador[1])
+        self._dibujar_pokemon(pantalla, pokemon_ia, pos_ia, "ia") #Pokemon rival posicion
+        self._dibujar_pokemon(pantalla, pokemon_jugador, pos_jug, "jugador") #Pokemon aliado posicion
         # Efectos de las habilidades (baldosas de stats sobre la silueta y partículas)
-        self.gestor.dibujar_sobre_sprites(pantalla, {"ia": (pokemon_ia, pos_ia), "jugador": (pokemon_jugador, pos_jug)})
+        self.gestor.dibujar_sobre_pokemons(pantalla, {"ia": (pokemon_ia, pos_ia), "jugador": (pokemon_jugador, pos_jug)})
         self.gestor.dibujar(pantalla)
+        # Texto de daño sobre cada Pokémon
         self._dibujar_texto_flotante(pantalla, "ia", 1360, 150)
         self._dibujar_texto_flotante(pantalla, "jugador", 500, 470)
 
-        self._dibujar_caja_vida(pantalla, "rival", combate.i_nombre, combate.i_hp, combate.i_hp_max, False)
-        self._dibujar_caja_vida(pantalla, "jugador", combate.p_nombre, combate.p_hp, combate.p_hp_max, True)
+        # Cajas de vida: la del rival sin números y la del jugador con ellos
+        self._dibujar_caja_vida(pantalla, "rival", combate.nombre_ia, combate.hp_actual_ia, combate.hp_max_ia, False)
+        self._dibujar_caja_vida(pantalla, "jugador", combate.nombre_jugador, combate.hp_actual_jugador, combate.hp_max_jugador, True)
 
         eligiendo_ataque = combate.turno == "jugador" and combate.sub_menu == "luchar"
         # La barra de mensajes se ve siempre, tambien al elegir habilidad
         barra = obtener_barra_mensaje(BARRA_MSJ_RECT.w, BARRA_MSJ_RECT.h)
 
+        # Vida baja = menos del 20% de la vida máxima del Pokémon del jugador (no cuenta al terminar el combate)
         en_peligro = (combate.turno != "fin"
-              and 0 < combate.p_hp <= combate.p_hp_max * 0.2)
+              and 0 < combate.hp_actual_jugador <= combate.hp_max_jugador * 0.2)
         
         if en_peligro:      # Reproduce un sonido si la vida esta baja en bucle
             sonido.loop("efectos/health_low_loop")
         else:
             sonido.parar_loop("efectos/health_low_loop")
 
+        # Dibuja la barra de mensajes o, si falta la imagen, un rectángulo de respaldo
         if barra:
             pantalla.blit(barra, BARRA_MSJ_RECT.topleft)
         else:   # respaldo si falta assets/ui/barra_mensaje.png
@@ -536,13 +582,15 @@ class EscenaCombate:
             pygame.draw.rect(pantalla, GRIS_CLARO, (110, 810, 1700, 200), border_radius=10)
         # Texto dentro de la zona blanca
         if not (combate.turno == "jugador" and combate.sub_menu in ("luchar", "cambiar")):   # al elegir habilidad o Pokémon la barra queda sin mensaje
-            lineas = [l.strip() for l in separar_texto_en_lineas(combate.mensaje, FUENTE, 1020) if l.strip()]
+            # Se parte el mensaje en líneas y el bloque se centra verticalmente en la barra
+            lineas = [linea.strip() for linea in separar_texto_en_lineas(combate.mensaje, FUENTE, 1020) if linea.strip()]
             alto_linea = FUENTE.get_linesize()
             y_txt = BARRA_MSJ_RECT.centery - len(lineas) * alto_linea // 2
-            for l in lineas:
-                pantalla.blit(FUENTE.render(l, True, NEGRO), (BARRA_MSJ_RECT.x + 80, y_txt))
+            for linea in lineas:
+                pantalla.blit(FUENTE.render(linea, True, NEGRO), (BARRA_MSJ_RECT.x + 80, y_txt))
                 y_txt += alto_linea
 
+        # Menú principal: botones LUCHAR y CAMBIAR/POKÉMON (en 1v1 se llama POKÉMON porque no hay a quién cambiar)
         if combate.turno == "jugador" and combate.sub_menu == "principal" and not self.gestor.ocupado():
             # Texto boton LUCHAR
             pygame.draw.rect(pantalla, ROJO_BOTON, RECT_LUCHAR, border_radius=12)
@@ -553,81 +601,84 @@ class EscenaCombate:
             # Texto boton POKEMON
             pygame.draw.rect(pantalla, VERDE_BOTON, RECT_CAMBIAR, border_radius=12)
             pygame.draw.rect(pantalla, NEGRO, RECT_CAMBIAR, 3, border_radius=12)
-            txt_cambio = "CAMBIAR" if combate.modo == "3v3" else "POKÉMON"
-            txt_c = FUENTE_GRANDE.render(txt_cambio, True, BLANCO)
-            pantalla.blit(txt_c, txt_c.get_rect(center=RECT_CAMBIAR.center))
+            etiqueta_cambiar = "CAMBIAR" if combate.modo == "3v3" else "POKÉMON"
+            texto_cambiar = FUENTE_GRANDE.render(etiqueta_cambiar, True, BLANCO)
+            pantalla.blit(texto_cambiar, texto_cambiar.get_rect(center=RECT_CAMBIAR.center))
 
+        # Submenú de habilidades: una caja por habilidad, con su nombre y su potencia
         elif combate.turno == "jugador" and combate.sub_menu == "luchar":
-            habilidades = combate.p_data["habilidades"]
-            for idx, hab in enumerate(habilidades):
-                nombre_h, pot, tipo_h = hab
-                r = rect_habilidad(idx)
-                caja = obtener_caja_ataque(tipo_h)
+            habilidades = combate.datos_jugador["habilidades"]
+            for idx, habilidad in enumerate(habilidades):
+                nombre_habilidad, potencia, tipo_habilidad = habilidad
+                rect_boton = rect_habilidad(idx)
+                caja = obtener_caja_ataque(tipo_habilidad)
                 if caja:
-                    pantalla.blit(caja, r.topleft)
+                    pantalla.blit(caja, rect_boton.topleft)
                 else:   # respaldo si falta la imagen
-                    pygame.draw.rect(pantalla, tema["principal"], r, border_radius=12)
-                    pygame.draw.rect(pantalla, NEGRO, r, 3, border_radius=12)
+                    pygame.draw.rect(pantalla, tema["principal"], rect_boton, border_radius=12)
+                    pygame.draw.rect(pantalla, NEGRO, rect_boton, 3, border_radius=12)
                 # Nombre del ataque en la mitad de arriba de la caja
-                txt_h = FUENTE_HABILIDAD .render(nombre_h, True, NEGRO)
+                texto_habilidad = FUENTE_HABILIDAD .render(nombre_habilidad, True, NEGRO)
                 max_ancho = int(100 * ESCALA_ATAQUE)
-                if txt_h.get_width() > max_ancho:   # si no cabe, se reduce
-                    txt_h = pygame.transform.smoothscale(txt_h, (max_ancho, int(txt_h.get_height() * max_ancho / txt_h.get_width())))
-                pantalla.blit(txt_h, txt_h.get_rect(midleft=(r.x + int(12 * ESCALA_ATAQUE), r.y + int(19 * ESCALA_ATAQUE))))
+                if texto_habilidad.get_width() > max_ancho:   # si no cabe, se reduce
+                    texto_habilidad = pygame.transform.smoothscale(texto_habilidad, (max_ancho, int(texto_habilidad.get_height() * max_ancho / texto_habilidad.get_width())))
+                pantalla.blit(texto_habilidad, texto_habilidad.get_rect(midleft=(rect_boton.x + int(12 * ESCALA_ATAQUE), rect_boton.y + int(19 * ESCALA_ATAQUE))))
                 # Potencia, en el lugar donde iba "PP /"
-                txt_pot = FUENTE_HABILIDAD .render(f"Pot. {pot}" if pot > 0 else "Pot. -", True, (60, 75, 60))
-                pantalla.blit(txt_pot, txt_pot.get_rect(midleft=(r.x + int(53 * ESCALA_ATAQUE), r.y + int(36 * ESCALA_ATAQUE))))
+                txt_pot = FUENTE_HABILIDAD .render(f"Pot. {potencia}" if potencia > 0 else "Pot. -", True, (60, 75, 60))
+                pantalla.blit(txt_pot, txt_pot.get_rect(midleft=(rect_boton.x + int(53 * ESCALA_ATAQUE), rect_boton.y + int(36 * ESCALA_ATAQUE))))
             self._dibujar_boton_volver(pantalla)
 
+        # Submenú del equipo: una caja por Pokémon con miniatura, nombre y vida
         elif combate.turno == "jugador" and combate.sub_menu == "cambiar":
-            E = ESCALA_EQUIPO
-            for idx, p_eq in enumerate(combate.eq_jugador):
-                r = rect_pokemon(idx)
-                hp_actual = combate.hp_jugador[p_eq]
-                hp_max = CATALOGO_POKEMONS[p_eq]["hp"]
+            escala_equipo = ESCALA_EQUIPO
+            for idx, pokemon_equipo in enumerate(combate.equipo_jugador):
+                rect_boton = rect_pokemon(idx)
+                hp_actual = combate.hp_jugador[pokemon_equipo]
+                hp_max = CATALOGO_POKEMONS[pokemon_equipo]["hp"]
                 elegido = (idx == self.seleccion)
-                apagado = hp_actual <= 0 or idx == combate.idx_activo_j
+                # Se oscurece al Pokémon debilitado o al que ya está combatiendo
+                apagado = hp_actual <= 0 or idx == combate.idx_activo_jugador
                 caja = obtener_caja_equipo(elegido, apagado)
                 if caja:
-                    pantalla.blit(caja, r.topleft)
+                    pantalla.blit(caja, rect_boton.topleft)
                 else:   # respaldo si falta la imagen
-                    pygame.draw.rect(pantalla, GRIS_OSCURO if apagado else AZUL_BOTON, r, border_radius=12)
-                    pygame.draw.rect(pantalla, NEGRO, r, 3, border_radius=12)
+                    pygame.draw.rect(pantalla, GRIS_OSCURO if apagado else AZUL_BOTON, rect_boton, border_radius=12)
+                    pygame.draw.rect(pantalla, NEGRO, rect_boton, 3, border_radius=12)
 
                 # Miniatura del Pokémon (arriba a la izquierda)
-                lado_mini = int(26 * E)
-                mini = obtener_sprite(p_eq, "frente", (lado_mini, lado_mini), (90, 90, 90))
-                if mini:
+                lado_miniatura = int(26 * escala_equipo)
+                miniatura = obtener_pokemon(pokemon_equipo, "frente", (lado_miniatura, lado_miniatura), (90, 90, 90))
+                if miniatura:
                     if hp_actual <= 0:
-                        mini = mini.copy()
-                        mini.fill((110, 110, 110, 255), special_flags=pygame.BLEND_RGBA_MULT)
-                    pantalla.blit(mini, (r.x + int(3 * E), r.y + int(3 * E)))
+                        miniatura = miniatura.copy()
+                        miniatura.fill((110, 110, 110, 255), special_flags=pygame.BLEND_RGBA_MULT)
+                    pantalla.blit(miniatura, (rect_boton.x + int(3 * escala_equipo), rect_boton.y + int(3 * escala_equipo)))
 
                 # Nombre (a la derecha de la miniatura; se reduce si no cabe)
-                txt_nombre = FUENTE_CHICA.render(p_eq.capitalize(), True, (20, 40, 80) if elegido else BLANCO)
-                max_ancho = int(44 * E)
+                txt_nombre = FUENTE_CHICA.render(pokemon_equipo.capitalize(), True, (20, 40, 80) if elegido else BLANCO)
+                max_ancho = int(44 * escala_equipo)
                 if txt_nombre.get_width() > max_ancho:
                     txt_nombre = pygame.transform.smoothscale(txt_nombre, (max_ancho, int(txt_nombre.get_height() * max_ancho / txt_nombre.get_width())))
-                pantalla.blit(txt_nombre, txt_nombre.get_rect(midleft=(r.x + int(31 * E), r.y + int(15 * E))))
+                pantalla.blit(txt_nombre, txt_nombre.get_rect(midleft=(rect_boton.x + int(31 * escala_equipo), rect_boton.y + int(15 * escala_equipo))))
 
                 # Barra de vida (sobre la pista de la imagen)
-                bx, by, bw, bh = BARRA_EQUIPO
-                prop = max(0.0, min(1.0, hp_actual / hp_max))
-                if prop > 0.5:
+                barra_x, barra_y, barra_ancho, barra_alto = BARRA_EQUIPO
+                proporcion_vida = max(0.0, min(1.0, hp_actual / hp_max))
+                if proporcion_vida > 0.5:
                     color, brillo = (72, 200, 112), (150, 235, 170)
-                elif prop > 0.2:
+                elif proporcion_vida > 0.2:
                     color, brillo = (240, 200, 48), (255, 235, 130)
                 else:
                     color, brillo = (232, 64, 48), (255, 140, 120)
-                ancho_fill = int(bw * E * prop)
-                if ancho_fill > 0:
-                    rx, ry, rh = r.x + int(bx * E), r.y + int(by * E), int(bh * E)
-                    pygame.draw.rect(pantalla, color, (rx, ry, ancho_fill, rh))
-                    pygame.draw.rect(pantalla, brillo, (rx, ry, ancho_fill, max(1, rh // 3)))
+                ancho_relleno = int(barra_ancho * escala_equipo * proporcion_vida)
+                if ancho_relleno > 0:
+                    relleno_x, relleno_y, relleno_alto = rect_boton.x + int(barra_x * escala_equipo), rect_boton.y + int(barra_y * escala_equipo), int(barra_alto * escala_equipo)
+                    pygame.draw.rect(pantalla, color, (relleno_x, relleno_y, ancho_relleno, relleno_alto))
+                    pygame.draw.rect(pantalla, brillo, (relleno_x, relleno_y, ancho_relleno, max(1, relleno_alto // 3)))
 
                 # Vida actual en número, debajo de la barra
                 txt_hp = FUENTE_EQUIPO.render(f"{hp_actual} / {hp_max}", True, NEGRO)
-                pantalla.blit(txt_hp, txt_hp.get_rect(midright=(r.x + int(74 * E), r.y + int(42 * E))))
+                pantalla.blit(txt_hp, txt_hp.get_rect(midright=(rect_boton.x + int(74 * escala_equipo), rect_boton.y + int(42 * escala_equipo))))
             self._dibujar_boton_volver(pantalla)
 
         elif combate.turno == "fin":
@@ -644,6 +695,7 @@ class EscenaCombate:
             es_equipo = combate.turno == "jugador" and combate.sub_menu == "cambiar" and isinstance(zonas[self.seleccion][0], tuple)
             if not es_equipo:
                 dibujar_resalte(pantalla, zonas[self.seleccion][1])
+        # VOLVER no se navega con flechas: solo se resalta cuando el mouse está encima
         pos_mouse = pos_virtual(pygame.mouse.get_pos())
         for accion, rect in self.zonas_clic():
             if accion == "volver" and rect.collidepoint(pos_mouse):
@@ -651,6 +703,7 @@ class EscenaCombate:
 
 
 # ----------------- MODO ARENA: formato + escenario -----------------
+# Modo Arena: columnas de la cuadrícula de escenarios, tamaño y origen de cada celda, botones de formato y vista previa
 COLUMNAS_ARENA = 6
 CELDA_ARENA = (215, 150)
 ORIGEN_ARENA = (60, 220)
@@ -660,6 +713,7 @@ TAM_VISTA_PREVIA = (480, 270)
 POS_VISTA_PREVIA = (1380, 220)
 
 
+# Rectángulo de la celda número idx de la cuadrícula (fila y columna salen con divmod)
 def rect_celda_arena(idx):
     fila, col = divmod(idx, COLUMNAS_ARENA)
     return pygame.Rect(ORIGEN_ARENA[0] + col * CELDA_ARENA[0], ORIGEN_ARENA[1] + fila * CELDA_ARENA[1],
@@ -678,8 +732,10 @@ class EscenaArena:
     def modo(self):
         return FORMATOS[self.formato]
 
+    # Flechas. Con el foco en "formato": izquierda/derecha cambian 1v1/3v3 y abajo baja a la cuadrícula.
+    # En la cuadrícula: se mueve entre escenarios y, desde la primera fila, arriba sube al formato
     def mover(self, tecla):
-        n = len(ESCENARIOS)
+        cantidad_escenarios = len(ESCENARIOS)
         if self.foco == "formato":
             if tecla == pygame.K_LEFT:
                 self.formato = 0
@@ -691,10 +747,10 @@ class EscenaArena:
         fila, col = divmod(self.escenario, COLUMNAS_ARENA)
         if tecla == pygame.K_LEFT and col > 0:
             self.escenario -= 1
-        elif tecla == pygame.K_RIGHT and self.escenario + 1 < n and col < COLUMNAS_ARENA - 1:
+        elif tecla == pygame.K_RIGHT and self.escenario + 1 < cantidad_escenarios and col < COLUMNAS_ARENA - 1:
             self.escenario += 1
         elif tecla == pygame.K_DOWN:
-            self.escenario = min(self.escenario + COLUMNAS_ARENA, n - 1)
+            self.escenario = min(self.escenario + COLUMNAS_ARENA, cantidad_escenarios - 1)
         elif tecla == pygame.K_UP:
             if fila == 0:
                 self.foco = "formato"
@@ -708,10 +764,11 @@ class EscenaArena:
             return None
         return "continuar"
 
+    # Mouse encima: el foco pasa al formato o escenario que esté bajo el cursor
     def pasar_mouse(self, pos_real):
         pos = pos_virtual(pos_real)
-        for i, r in enumerate(RECT_FORMATOS):
-            if r.collidepoint(pos):
+        for i, rect_boton in enumerate(RECT_FORMATOS):
+            if rect_boton.collidepoint(pos):
                 self.foco = "formato"
                 self.formato = i
                 return
@@ -721,10 +778,11 @@ class EscenaArena:
                 self.escenario = i
                 return
 
+    # Clic sobre un formato lo elige; sobre un escenario lo elige y devuelve "continuar"
     def clic(self, pos_real):
         pos = pos_virtual(pos_real)
-        for i, r in enumerate(RECT_FORMATOS):
-            if r.collidepoint(pos):
+        for i, rect_boton in enumerate(RECT_FORMATOS):
+            if rect_boton.collidepoint(pos):
                 self.foco = "formato"
                 self.formato = i
                 return None
@@ -740,47 +798,49 @@ class EscenaArena:
         pantalla.blit(FUENTE_GRANDE.render("MODO ARENA", True, BLANCO), (60, 30))
 
         # Formato
-        for i, r in enumerate(RECT_FORMATOS):
+        for i, rect_formato in enumerate(RECT_FORMATOS):
             activo = (i == self.formato)
-            pygame.draw.rect(pantalla, VERDE_BOTON if activo else (45, 52, 75), r, border_radius=12)
-            pygame.draw.rect(pantalla, BLANCO if activo else (90, 105, 140), r, 3, border_radius=12)
+            pygame.draw.rect(pantalla, VERDE_BOTON if activo else (45, 52, 75), rect_formato, border_radius=12)
+            pygame.draw.rect(pantalla, BLANCO if activo else (90, 105, 140), rect_formato, 3, border_radius=12)
             etiqueta = "1 vs 1" if i == 0 else "3 vs 3"
             txt = FUENTE_GRANDE.render(etiqueta, True, BLANCO)
-            pantalla.blit(txt, txt.get_rect(center=r.center))
+            pantalla.blit(txt, txt.get_rect(center=rect_formato.center))
             if self.foco == "formato" and activo:
-                dibujar_resalte(pantalla, r)
+                dibujar_resalte(pantalla, rect_formato)
 
         # Cuadrícula de escenarios
-        for i, esc in enumerate(ESCENARIOS):
-            r = rect_celda_arena(i)
+        for i, datos_escenario in enumerate(ESCENARIOS):
+            rect_celda = rect_celda_arena(i)
             elegido = (i == self.escenario)
-            pygame.draw.rect(pantalla, (55, 65, 100) if elegido else (35, 42, 60), r, border_radius=12)
+            pygame.draw.rect(pantalla, (55, 65, 100) if elegido else (35, 42, 60), rect_celda, border_radius=12)
             pygame.draw.rect(pantalla, (130, 150, 200) if elegido else (70, 85, 120),
-                             r, 4 if elegido else 2, border_radius=12)
+                             rect_celda, 4 if elegido else 2, border_radius=12)
             if elegido and self.foco == "grid":
-                dibujar_resalte(pantalla, r)
+                dibujar_resalte(pantalla, rect_celda)
             base = obtener_base("rival", i, 1.5)
             if base:
-                pantalla.blit(base, base.get_rect(center=(r.centerx, r.y + 62)))
-            txt = FUENTE_CHICA.render(esc["nombre"], True, BLANCO)
-            pantalla.blit(txt, txt.get_rect(center=(r.centerx, r.bottom - 22)))
+                pantalla.blit(base, base.get_rect(center=(rect_celda.centerx, rect_celda.y + 62)))
+            txt = FUENTE_CHICA.render(datos_escenario["nombre"], True, BLANCO)
+            pantalla.blit(txt, txt.get_rect(center=(rect_celda.centerx, rect_celda.bottom - 22)))
 
         # Vista previa del escenario elegido
-        vx, vy = POS_VISTA_PREVIA
-        pygame.draw.rect(pantalla, (40, 45, 65), (vx - 20, vy - 20, TAM_VISTA_PREVIA[0] + 40, 460), border_radius=15)
-        pygame.draw.rect(pantalla, AZUL_DS, (vx - 20, vy - 20, TAM_VISTA_PREVIA[0] + 40, 460), 4, border_radius=15)
-        pantalla.blit(obtener_vista_previa(self.escenario, TAM_VISTA_PREVIA), (vx, vy))
-        pygame.draw.rect(pantalla, NEGRO, (vx, vy, TAM_VISTA_PREVIA[0], TAM_VISTA_PREVIA[1]), 3)
+        vista_x, vista_y = POS_VISTA_PREVIA
+        pygame.draw.rect(pantalla, (40, 45, 65), (vista_x - 20, vista_y - 20, TAM_VISTA_PREVIA[0] + 40, 460), border_radius=15)
+        pygame.draw.rect(pantalla, AZUL_DS, (vista_x - 20, vista_y - 20, TAM_VISTA_PREVIA[0] + 40, 460), 4, border_radius=15)
+        pantalla.blit(obtener_vista_previa(self.escenario, TAM_VISTA_PREVIA), (vista_x, vista_y))
+        pygame.draw.rect(pantalla, NEGRO, (vista_x, vista_y, TAM_VISTA_PREVIA[0], TAM_VISTA_PREVIA[1]), 3)
         nombre = FUENTE_GRANDE.render(ESCENARIOS[self.escenario]["nombre"], True, (255, 230, 50))
-        pantalla.blit(nombre, nombre.get_rect(center=(vx + TAM_VISTA_PREVIA[0] // 2, vy + TAM_VISTA_PREVIA[1] + 50)))
+        pantalla.blit(nombre, nombre.get_rect(center=(vista_x + TAM_VISTA_PREVIA[0] // 2, vista_y + TAM_VISTA_PREVIA[1] + 50)))
         modo = FUENTE.render(f"Formato: {self.modo}", True, BLANCO)
-        pantalla.blit(modo, modo.get_rect(center=(vx + TAM_VISTA_PREVIA[0] // 2, vy + TAM_VISTA_PREVIA[1] + 100)))
+        pantalla.blit(modo, modo.get_rect(center=(vista_x + TAM_VISTA_PREVIA[0] // 2, vista_y + TAM_VISTA_PREVIA[1] + 100)))
 
+        # Texto de ayuda con los controles
         ayuda = FUENTE.render("Flechas: mover  |  ENTER / clic: elegir escenario  |  ESC: volver", True, (180, 190, 210))
         pantalla.blit(ayuda, (60, 1020))
 
 
 # ----------------- PANTALLAS -----------------
+# Dibuja el menú principal: panel azul, título y botones (el seleccionado lleva resalte)
 def dibujar_menu_principal(pantalla, botones, seleccion_idx):
     pantalla.fill((20, 35, 60))
     pygame.draw.rect(pantalla, AZUL_DS, (610, 240, 700, 600), border_radius=20)
@@ -792,178 +852,191 @@ def dibujar_menu_principal(pantalla, botones, seleccion_idx):
     for idx, boton in enumerate(botones):
         boton.dibujar(pantalla, resaltado=(idx == seleccion_idx))
 
-    sub_inf = FUENTE_CHICA.render("Usa Flechas ARRIBA/ABAJO y ENTER para seleccionar", True, (200, 220, 240))
-    pantalla.blit(sub_inf, (710, 800))
+    texto_ayuda = FUENTE_CHICA.render("Usa Flechas ARRIBA/ABAJO y ENTER para seleccionar", True, (200, 220, 240))
+    pantalla.blit(texto_ayuda, (710, 800))
 
 
+# Pantalla para elegir pokémons: lista con scroll a la izquierda y vista grande del resaltado a la derecha
 def dibujar_seleccion(pantalla, equipo_seleccionado, seleccion_idx, scroll_offset_sel, modo_juego):
         pantalla.fill((25, 28, 40))
 
-        meta_eq = 1 if modo_juego == "1v1" else 3
-        txt_sel_info = FUENTE.render(f"SELECCIONA TUS POKÉMON ({len(equipo_seleccionado)}/{meta_eq}) - Modo {modo_juego}", True, BLANCO)
-        pantalla.blit(txt_sel_info, (60, 40))
+        meta_equipo = 1 if modo_juego == "1v1" else 3
+        texto_titulo = FUENTE.render(f"SELECCIONA TUS POKÉMON ({len(equipo_seleccionado)}/{meta_equipo}) - Modo {modo_juego}", True, BLANCO)
+        pantalla.blit(texto_titulo, (60, 40))
 
+        # Recorte: lo que se dibuje fuera de este rectángulo no se ve (así la lista con scroll no tapa el título)
         pantalla.set_clip(pygame.Rect(60, 100, 700, 900))
+        # Altura donde se dibuja cada elemento; el scroll la desplaza hacia arriba
         y_cursor = 120 - scroll_offset_sel
-        for tipo_sec, pokes in SECCIONES_POKEMON.items():
-            color_hdr = COLORES_TIPO.get(tipo_sec, BLANCO)
-            txt_tipo = FUENTE.render(f"--- {tipo_sec} ---", True, color_hdr)
-            pantalla.blit(txt_tipo, (60, y_cursor))
+        for tipo_seccion, pokes in SECCIONES_POKEMON.items():
+            color_encabezado = COLORES_TIPO.get(tipo_seccion, BLANCO)
+            texto_tipo = FUENTE.render(f"--- {tipo_seccion} ---", True, color_encabezado)
+            pantalla.blit(texto_tipo, (60, y_cursor))
             y_cursor += 45
 
-            for p_name in pokes:
-                idx_global = LISTA_PLANA_POKES.index(p_name)
-                is_sel = idx_global == seleccion_idx
-                is_chosen = p_name in equipo_seleccionado
+            for nombre_pokemon in pokes:
+                indice_global = LISTA_PLANA_POKES.index(nombre_pokemon)
+                esta_resaltado = indice_global == seleccion_idx
+                esta_elegido = nombre_pokemon in equipo_seleccionado
 
-                color_txt = (255, 230, 50) if is_sel else ((100, 255, 100) if is_chosen else BLANCO)
-                pref = "✔ " if is_chosen else ("> " if is_sel else "   ")
+                color_texto = (255, 230, 50) if esta_resaltado else ((100, 255, 100) if esta_elegido else BLANCO)
+                # Marca delante del nombre: ✔ ya elegido, > resaltado
+                prefijo = "✔ " if esta_elegido else ("> " if esta_resaltado else "   ")
 
-                txt_p = FUENTE.render(f"{pref}{p_name.capitalize()}", True, color_txt)
-                pantalla.blit(txt_p, (60, y_cursor))
+                texto_pokemon = FUENTE.render(f"{prefijo}{nombre_pokemon.capitalize()}", True, color_texto)
+                pantalla.blit(texto_pokemon, (60, y_cursor))
                 y_cursor += 50
             y_cursor += 20
+        # Quita el recorte
         pantalla.set_clip(None)
 
-        poke_actual = LISTA_PLANA_POKES[seleccion_idx]
+        pokemon_actual = LISTA_PLANA_POKES[seleccion_idx]
         pygame.draw.rect(pantalla, (40, 45, 65), (840, 100, 1000, 880), border_radius=15)
         pygame.draw.rect(pantalla, AZUL_DS, (840, 100, 1000, 880), 4, border_radius=15)
 
-        img_f = obtener_sprite(poke_actual, "frente", (600, 600))
-        if img_f:
-            pantalla.blit(img_f, (1040, 200))
+        imagen_frente = obtener_pokemon(pokemon_actual, "frente", (600, 600))
+        if imagen_frente:
+            pantalla.blit(imagen_frente, (1040, 200))
 
-        t_name_prev = FUENTE_GRANDE.render(poke_actual.upper(), True, BLANCO)
-        pantalla.blit(t_name_prev, (880, 130))
+        texto_nombre = FUENTE_GRANDE.render(pokemon_actual.upper(), True, BLANCO)
+        pantalla.blit(texto_nombre, (880, 130))
 
 
+# Muestra las estadísticas de cada Pokémon del equipo antes de empezar el combate
 def dibujar_estadisticas(pantalla, equipo_seleccionado):
         pantalla.fill((30, 144, 255))
         pygame.draw.rect(pantalla, (240, 245, 255), (100, 80, 1720, 920), border_radius=15)
         pygame.draw.rect(pantalla, (20, 80, 160), (100, 80, 1720, 920), 5, border_radius=15)
 
         pygame.draw.rect(pantalla, (20, 80, 160), (100, 80, 1720, 70), border_top_left_radius=15, border_top_right_radius=15)
-        txt_est_hdr = FUENTE.render("ESTADÍSTICAS DEL EQUIPO SELECCIONADO", True, BLANCO)
-        pantalla.blit(txt_est_hdr, (140, 100))
+        texto_encabezado = FUENTE.render("ESTADÍSTICAS DEL EQUIPO SELECCIONADO", True, BLANCO)
+        pantalla.blit(texto_encabezado, (140, 100))
 
-        for i, p_elec in enumerate(equipo_seleccionado):
-            data_p = CATALOGO_POKEMONS[p_elec]
-            ox = 140 + (i * 560)
-            oy = 180
+        # Una tarjeta por Pokémon, separadas 560 px entre sí
+        for i, pokemon_elegido in enumerate(equipo_seleccionado):
+            datos_pokemon = CATALOGO_POKEMONS[pokemon_elegido]
+            tarjeta_x = 140 + (i * 560)
+            tarjeta_y = 180
 
-            pygame.draw.rect(pantalla, BLANCO, (ox, oy, 500, 680), border_radius=12)
-            pygame.draw.rect(pantalla, (100, 150, 200), (ox, oy, 500, 680), 3, border_radius=12)
+            pygame.draw.rect(pantalla, BLANCO, (tarjeta_x, tarjeta_y, 500, 680), border_radius=12)
+            pygame.draw.rect(pantalla, (100, 150, 200), (tarjeta_x, tarjeta_y, 500, 680), 3, border_radius=12)
 
-            img_f = obtener_sprite(p_elec, "frente", (250, 250))
-            if img_f:
-                pantalla.blit(img_f, (ox + 125, oy + 20))
+            imagen_frente = obtener_pokemon(pokemon_elegido, "frente", (250, 250))
+            if imagen_frente:
+                pantalla.blit(imagen_frente, (tarjeta_x + 125, tarjeta_y + 20))
 
-            t_p = FUENTE_GRANDE.render(p_elec.upper(), True, NEGRO)
-            pantalla.blit(t_p, (ox + 30, oy + 290))
+            texto_nombre = FUENTE_GRANDE.render(pokemon_elegido.upper(), True, NEGRO)
+            pantalla.blit(texto_nombre, (tarjeta_x + 30, tarjeta_y + 290))
 
-            t_tip = FUENTE.render(f"Tipo: {data_p['tipo']} | Nv. 70", True, AZUL_OSCURO)
-            pantalla.blit(t_tip, (ox + 30, oy + 350))
+            texto_tipo = FUENTE.render(f"Tipo: {datos_pokemon['tipo']} | Nv. 70", True, AZUL_OSCURO)
+            pantalla.blit(texto_tipo, (tarjeta_x + 30, tarjeta_y + 350))
 
-            stats_texto = [
-                f"HP: {data_p['hp']}", f"Ataque: {data_p['ataque']}", f"Defensa: {data_p['defensa']}",
-                f"At. Esp: {data_p['atk_esp']}", f"Velocidad: {data_p['velocidad']}"
+            lineas_estadisticas = [
+                f"HP: {datos_pokemon['hp']}", f"Ataque: {datos_pokemon['ataque']}", f"Defensa: {datos_pokemon['defensa']}",
+                f"At. Esp: {datos_pokemon['atk_esp']}", f"Velocidad: {datos_pokemon['velocidad']}"
             ]
-            for s_idx, st in enumerate(stats_texto):
-                txt_st = FUENTE.render(st, True, NEGRO)
-                pantalla.blit(txt_st, (ox + 30, oy + 420 + (s_idx * 45)))
+            for indice_estadistica, linea in enumerate(lineas_estadisticas):
+                texto_estadistica = FUENTE.render(linea, True, NEGRO)
+                pantalla.blit(texto_estadistica, (tarjeta_x + 30, tarjeta_y + 420 + (indice_estadistica * 45)))
 
-        btn_rect = pygame.Rect(710, 900, 500, 70)
-        pygame.draw.rect(pantalla, (40, 180, 90), btn_rect, border_radius=12)
-        txt_comenzar = FUENTE.render("¡COMENZAR COMBATE!", True, BLANCO)
-        txt_rect = txt_comenzar.get_rect(center=btn_rect.center)
-        pantalla.blit(txt_comenzar, txt_rect)
+        # Botón COMENZAR (visual; se confirma con ENTER o ESPACIO)
+        rect_boton = pygame.Rect(710, 900, 500, 70)
+        pygame.draw.rect(pantalla, (40, 180, 90), rect_boton, border_radius=12)
+        texto_comenzar = FUENTE.render("¡COMENZAR COMBATE!", True, BLANCO)
+        rect_texto = texto_comenzar.get_rect(center=rect_boton.center)
+        pantalla.blit(texto_comenzar, rect_texto)
 
 
-def dibujar_biblioteca(pantalla, tipo_claves, scroll_offset_lib, lib_detalle, lib_sec_idx, lib_poke_idx):
+# Pokédex: tarjetas de pokémons agrupadas por tipo o, si lib_detalle es True, la ficha detallada del resaltado
+def dibujar_biblioteca(pantalla, tipo_claves, scroll_offset_lib, lib_detalle, lib_seccion_idx, lib_pokemon_idx):
         pantalla.fill((25, 28, 40))
 
-        titulo_lib = FUENTE_GRANDE.render("BIBLIOTECA POKÉMON (Pokédex)", True, BLANCO)
-        pantalla.blit(titulo_lib, (60, 30))
+        titulo_biblioteca = FUENTE_GRANDE.render("BIBLIOTECA POKÉMON (Pokédex)", True, BLANCO)
+        pantalla.blit(titulo_biblioteca, (60, 30))
 
+        # Vista de lista
         if not lib_detalle:
             pantalla.set_clip(pygame.Rect(60, 100, 1800, 940))
 
-            curr_y = 110 - scroll_offset_lib
-            for r_idx, tipo_sec in enumerate(tipo_claves):
-                col_t = COLORES_TIPO.get(tipo_sec, BLANCO)
-                txt_tipo_hdr = FUENTE.render(f"--- {tipo_sec} ---", True, col_t)
-                pantalla.blit(txt_tipo_hdr, (100, curr_y))
-                curr_y += 50
+            y_actual = 110 - scroll_offset_lib
+            for indice_seccion, tipo_seccion in enumerate(tipo_claves):
+                color_tipo = COLORES_TIPO.get(tipo_seccion, BLANCO)
+                texto_encabezado = FUENTE.render(f"--- {tipo_seccion} ---", True, color_tipo)
+                pantalla.blit(texto_encabezado, (100, y_actual))
+                y_actual += 50
 
-                pokes = SECCIONES_POKEMON[tipo_sec]
-                for c_idx, poke_name in enumerate(pokes):
-                    columna = c_idx % 2
-                    if columna == 0 and c_idx > 0:
-                        curr_y += 190
+                pokemons_seccion = SECCIONES_POKEMON[tipo_seccion]
+                for indice_pokemon, nombre_pokemon in enumerate(pokemons_seccion):
+                    # Dos columnas: al volver a la primera se baja una fila (190 px)
+                    columna = indice_pokemon % 2
+                    if columna == 0 and indice_pokemon > 0:
+                        y_actual += 190
 
-                    cx = 100 + (columna * 880)
-                    cy = curr_y
+                    tarjeta_x = 100 + (columna * 880)
+                    tarjeta_y = y_actual
 
-                    is_highlighted = (r_idx == lib_sec_idx and c_idx == lib_poke_idx)
-                    bg_c = (55, 65, 100) if is_highlighted else (35, 42, 60)
-                    b_c = (130, 150, 200) if is_highlighted else (70, 85, 120)
-                    b_w = 4 if is_highlighted else 2
+                    esta_resaltado = (indice_seccion == lib_seccion_idx and indice_pokemon == lib_pokemon_idx)
+                    color_fondo = (55, 65, 100) if esta_resaltado else (35, 42, 60)
+                    color_borde = (130, 150, 200) if esta_resaltado else (70, 85, 120)
+                    grosor_borde = 4 if esta_resaltado else 2
 
-                    card_rect = pygame.Rect(cx, cy, 840, 170)
-                    pygame.draw.rect(pantalla, bg_c, card_rect, border_radius=12)
-                    pygame.draw.rect(pantalla, b_c, card_rect, b_w, border_radius=12)
-                    if is_highlighted:
-                        dibujar_resalte(pantalla, card_rect)
+                    rect_tarjeta = pygame.Rect(tarjeta_x, tarjeta_y, 840, 170)
+                    pygame.draw.rect(pantalla, color_fondo, rect_tarjeta, border_radius=12)
+                    pygame.draw.rect(pantalla, color_borde, rect_tarjeta, grosor_borde, border_radius=12)
+                    if esta_resaltado:
+                        dibujar_resalte(pantalla, rect_tarjeta)
 
-                    img_c = obtener_sprite(poke_name, "frente", (140, 140))
-                    if img_c:
-                        pantalla.blit(img_c, (cx + 20, cy + 15))
+                    imagen_frente = obtener_pokemon(nombre_pokemon, "frente", (140, 140))
+                    if imagen_frente:
+                        pantalla.blit(imagen_frente, (tarjeta_x + 20, tarjeta_y + 15))
 
-                    txt_pn = FUENTE_GRANDE.render(poke_name.capitalize(), True, BLANCO)
-                    pantalla.blit(txt_pn, (cx + 190, cy + 60))
+                    texto_nombre = FUENTE_GRANDE.render(nombre_pokemon.capitalize(), True, BLANCO)
+                    pantalla.blit(texto_nombre, (tarjeta_x + 190, tarjeta_y + 60))
 
-                curr_y += 210
+                y_actual += 210
 
             pantalla.set_clip(None)
 
-            inst_lib = FUENTE.render("Usa Flechas [ARRIBA/ABAJO/IZQ/DER] | [ENTER] Ver Detalles | [ESC] Volver", True, (180, 190, 210))
-            pantalla.blit(inst_lib, (100, 1020))
+            texto_instrucciones = FUENTE.render("Usa Flechas [ARRIBA/ABAJO/IZQ/DER] | [ENTER] Ver Detalles | [ESC] Volver", True, (180, 190, 210))
+            pantalla.blit(texto_instrucciones, (100, 1020))
 
         else:
-            poke_sel = SECCIONES_POKEMON[tipo_claves[lib_sec_idx]][lib_poke_idx]
-            data_lib = CATALOGO_POKEMONS[poke_sel]
+            # Vista de detalle: ficha completa del Pokémon elegido (tipo, estadísticas, descripción y habilidades)
+            pokemon_seleccionado = SECCIONES_POKEMON[tipo_claves[lib_seccion_idx]][lib_pokemon_idx]
+            datos_pokemon = CATALOGO_POKEMONS[pokemon_seleccionado]
 
             pygame.draw.rect(pantalla, (45, 50, 75), (260, 140, 1400, 800), border_radius=20)
             pygame.draw.rect(pantalla, AZUL_DS, (260, 140, 1400, 800), 5, border_radius=20)
 
-            img_lib = obtener_sprite(poke_sel, "frente", (320, 320))
-            if img_lib:
-                pantalla.blit(img_lib, (320, 180))
+            imagen_frente = obtener_pokemon(pokemon_seleccionado, "frente", (320, 320))
+            if imagen_frente:
+                pantalla.blit(imagen_frente, (320, 180))
 
-            t_nom_lib = FUENTE_GRANDE.render(poke_sel.upper(), True, BLANCO)
-            pantalla.blit(t_nom_lib, (700, 180))
+            texto_nombre = FUENTE_GRANDE.render(pokemon_seleccionado.upper(), True, BLANCO)
+            pantalla.blit(texto_nombre, (700, 180))
 
-            t_tip_lib = FUENTE.render(f"Tipo: {data_lib['tipo']} | HP: {data_lib['hp']}", True, (255, 220, 50))
-            pantalla.blit(t_tip_lib, (700, 240))
+            texto_tipo = FUENTE.render(f"Tipo: {datos_pokemon['tipo']} | HP: {datos_pokemon['hp']}", True, (255, 220, 50))
+            pantalla.blit(texto_tipo, (700, 240))
 
-            stats_det = f"Ataque: {data_lib['ataque']} | Defensa: {data_lib['defensa']} | Velocidad: {data_lib['velocidad']}"
-            t_st_det = FUENTE.render(stats_det, True, (200, 220, 240))
-            pantalla.blit(t_st_det, (700, 300))
+            estadisticas_detalle = f"Ataque: {datos_pokemon['ataque']} | Defensa: {datos_pokemon['defensa']} | Velocidad: {datos_pokemon['velocidad']}"
+            texto_estadisticas = FUENTE.render(estadisticas_detalle, True, (200, 220, 240))
+            pantalla.blit(texto_estadisticas, (700, 300))
 
-            t_desc_tit = FUENTE.render("Descripción:", True, (200, 220, 250))
-            pantalla.blit(t_desc_tit, (320, 540))
+            texto_titulo_descripcion = FUENTE.render("Descripción:", True, (200, 220, 250))
+            pantalla.blit(texto_titulo_descripcion, (320, 540))
 
-            lineas_desc = separar_texto_en_lineas(data_lib["desc"], FUENTE, 1200)
-            for l_idx, linea in enumerate(lineas_desc):
-                txt_l = FUENTE.render(linea, True, BLANCO)
-                pantalla.blit(txt_l, (320, 600 + (l_idx * 40)))
+            # La descripción se parte en líneas de máximo 1200 px
+            lineas_descripcion = separar_texto_en_lineas(datos_pokemon["desc"], FUENTE, 1200)
+            for indice_linea, linea in enumerate(lineas_descripcion):
+                texto_linea = FUENTE.render(linea, True, BLANCO)
+                pantalla.blit(texto_linea, (320, 600 + (indice_linea * 40)))
 
-            t_hab_tit = FUENTE.render("Habilidades:", True, (200, 220, 250))
-            pantalla.blit(t_hab_tit, (320, 720))
+            texto_titulo_habilidades = FUENTE.render("Habilidades:", True, (200, 220, 250))
+            pantalla.blit(texto_titulo_habilidades, (320, 720))
 
-            for h_idx, (hn, hp, ht) in enumerate(data_lib["habilidades"]):
-                txt_h_lib = FUENTE.render(f"• {hn} (Potencia: {hp} | Tipo: {ht})", True, BLANCO)
-                pantalla.blit(txt_h_lib, (350, 780 + (h_idx * 40)))
+            for indice_habilidad, (nombre_habilidad, potencia, tipo_habilidad) in enumerate(datos_pokemon["habilidades"]):
+                texto_habilidad = FUENTE.render(f"• {nombre_habilidad} (Potencia: {potencia} | Tipo: {tipo_habilidad})", True, BLANCO)
+                pantalla.blit(texto_habilidad, (350, 780 + (indice_habilidad * 40)))
 
-            nav_txt = FUENTE.render("Presiona [ESC] o [ENTER] para regresar", True, (180, 190, 210))
-            pantalla.blit(nav_txt, (720, 870))
+            texto_navegacion = FUENTE.render("Presiona [ESC] o [ENTER] para regresar", True, (180, 190, 210))
+            pantalla.blit(texto_navegacion, (720, 870))

@@ -1,6 +1,7 @@
 # ----------------- BASE DE DATOS DE LOS 25 POKÉMON -----------------
 
 
+# Pokémons agrupados por tipo (cada tipo es una sección en la selección y en la biblioteca)
 SECCIONES_POKEMON = {
     "FUEGO": ["charmander", "vulpix", "growlithe", "ponyta", "magmar"],
     "AGUA": ["squirtle", "psyduck", "poliwag", "horsea", "staryu"],
@@ -9,6 +10,8 @@ SECCIONES_POKEMON = {
     "TIERRA": ["sandshrew", "geodude", "cubone", "phanpy", "diglett"],
 }
 
+# Datos de cada Pokémon: tipo, vida (hp), estadísticas base, descripción y sus 4 habilidades.
+# Cada habilidad es (nombre, potencia, tipo); las de tipo "Estado" tienen potencia 0 y no hacen daño
 CATALOGO_POKEMONS = {
     "charmander": {
         "tipo": "Fuego", "hp": 120, "ataque": 52, "defensa": 43, "atk_esp": 60, "def_esp": 50, "velocidad": 65,
@@ -137,7 +140,8 @@ CATALOGO_POKEMONS = {
     },
 }
 
+# Lista única con todos los pokémons en orden (la selección la usa para moverse con las flechas)
 LISTA_PLANA_POKES = []
-for tipo_sec, pokes in SECCIONES_POKEMON.items():
-    for p in pokes:
-        LISTA_PLANA_POKES.append(p)
+for tipo_seccion, nombres_pokemons in SECCIONES_POKEMON.items():
+    for nombre_pokemon in nombres_pokemons:
+        LISTA_PLANA_POKES.append(nombre_pokemon)

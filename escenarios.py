@@ -1,5 +1,7 @@
 # ----------------- ESCENARIOS DEL MODO ARENA -----------------
 
+# Cada escenario tiene: nombre, número de fondo (assets/fondos/fondo_XX.png; None = degradado),
+# colores del cielo (arriba, abajo) y color del suelo. Los degradados solo se usan si no hay imagen de fondo
 ESCENARIOS = [
     {"nombre": "Pradera",         "fondo": 0,   "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},
     {"nombre": "Lago",            "fondo": 3,   "cielo": ((255, 255, 255), (255, 255, 255)), "suelo": (255, 255, 255)},

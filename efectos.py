@@ -21,11 +21,13 @@ CENTRO = {"ia": (1280, 410), "jugador": (640, 690)}
 # Punto de la cara (de donde salen los chorros y adonde llegan)
 CARA = {"ia": (1250, 360), "jugador": (700, 590)}
 
+# Cachés para no cargar ni escalar las mismas imágenes en cada frame: originales, escaladas y teñidas
 _CACHE = {}
 _CACHE_ESCALADAS = {}
 _CACHE_TINTADAS = {}
 
 
+# Carga assets/efectos/<grupo>/<nombre>.png (o None si no existe) y la guarda en caché
 def _cargar(grupo, nombre):
     clave = (grupo, nombre)
     if clave not in _CACHE:
@@ -34,15 +36,17 @@ def _cargar(grupo, nombre):
     return _CACHE[clave]
 
 
+# Carga la imagen de un ataque: n puede ser un número (a001, a002...) o el nombre de un archivo
 def cargar_sprite_ataque(n):
     return _cargar("ataque", n if isinstance(n, str) else f"a{n:03d}")
 
 
-def _escalar_con_cache(surf, factor):
-    clave = (id(surf), round(factor, 2))
+# Agranda la imagen por un factor (sin suavizar, es pixel art) y recuerda el resultado
+def _escalar_con_cache(superficie, factor):
+    clave = (id(superficie), round(factor, 2))
     if clave not in _CACHE_ESCALADAS:
-        w, h = surf.get_size()
-        _CACHE_ESCALADAS[clave] = pygame.transform.scale(surf, (max(1, int(w * factor)), max(1, int(h * factor))))
+        ancho, alto = superficie.get_size()
+        _CACHE_ESCALADAS[clave] = pygame.transform.scale(superficie, (max(1, int(ancho * factor)), max(1, int(alto * factor))))
     return _CACHE_ESCALADAS[clave]
 
 
@@ -58,15 +62,18 @@ def _tintar(img, tinte):
     return _CACHE_TINTADAS[clave]
 
 
-def _lerp(a, b, u):
-    return a + (b - a) * u
+# Interpolación lineal: con fraccion=0 devuelve inicio, con fraccion=1 devuelve fin y en medio, un punto intermedio
+def _lerp(inicio, fin, fraccion):
+    return inicio + (fin - inicio) * fraccion
 
 
+# Devuelve el otro bando: "ia" <-> "jugador"
 def _oponente(lado):
     return "ia" if lado == "jugador" else "jugador"
 
 
 # ----------------- ELEMENTOS ANIMADOS -----------------
+# Elemento animado básico: una imagen (o varios fotogramas) que se mueve, crece, rota y se desvanece
 class Particula:
     """Un sprite (o varios fotogramas) que viaja de 'desde' a 'hasta'."""
 
@@ -83,28 +90,37 @@ class Particula:
         self.frame_fin = frame_inicio + duracion
 
     def dibujar(self, pantalla, frame_actual):
+        # Fuera de su ventana de tiempo (o sin imágenes) no se dibuja nada
         if not self.frames or frame_actual < self.frame_inicio or frame_actual >= self.frame_fin:
             return
         frames_transcurridos = frame_actual - self.frame_inicio
+        # progreso va de 0 (al empezar) a 1 (al terminar); con ida_vuelta sube hasta 1 y vuelve a 0
         progreso = frames_transcurridos / self.duracion
         progreso_ajustado = 1 - abs(2 * progreso - 1) if self.ida_vuelta else progreso
+        # Posición actual: punto intermedio entre origen y destino, con un arco hacia arriba si altura_arco > 0
         x = _lerp(self.desde[0], self.hasta[0], progreso_ajustado)
         y = _lerp(self.desde[1], self.hasta[1], progreso_ajustado) - self.altura_arco * 4 * progreso_ajustado * (1 - progreso_ajustado)
+        # Temblor aleatorio de la posición (usado en la electricidad)
         if self.amplitud_temblor:
             x += random.randint(-self.amplitud_temblor, self.amplitud_temblor)
             y += random.randint(-self.amplitud_temblor, self.amplitud_temblor)
+        # Fotograma actual (cambia cada frames_por_cuadro) con la escala que va de escala a escala_fin
         img = _escalar_con_cache(self.frames[(frames_transcurridos // self.frames_por_cuadro) % len(self.frames)], _lerp(self.escala, self.escala_fin, progreso))
+        # Cambia el color de la imagen
         if self.tinte:
             img = _tintar(img, self.tinte)
-        ang = self.angulo + self.giro_por_frame * frames_transcurridos
-        if ang:
-            img = pygame.transform.rotate(img, ang)
+        # Rotación: ángulo inicial más el giro acumulado en cada frame
+        angulo_actual = self.angulo + self.giro_por_frame * frames_transcurridos
+        if angulo_actual:
+            img = pygame.transform.rotate(img, angulo_actual)
+        # Transparencia: se desvanece de 255 (opaco) hasta alpha_fin
         alpha = int(_lerp(255, self.alpha_fin, progreso))
         if alpha < 255:
             img = img.copy()
             img.set_alpha(alpha)
-        flag = pygame.BLEND_RGB_ADD if self.aditivo else 0
-        pantalla.blit(img, img.get_rect(center=(int(x), int(y))), special_flags=flag)
+        # Modo aditivo: suma los colores con el fondo (efecto de brillo)
+        modo_mezcla = pygame.BLEND_RGB_ADD if self.aditivo else 0
+        pantalla.blit(img, img.get_rect(center=(int(x), int(y))), special_flags=modo_mezcla)
 
 
 class Chorro:
@@ -126,12 +142,14 @@ class Chorro:
         fraccion_extendida = min(1.0, (frames_transcurridos + 1) / self.frames_crecimiento)               # sale rápido y luego queda fijo
         largo = max(4, int(math.hypot(dx, dy) * fraccion_extendida))
         idx = (frames_transcurridos // self.frames_por_cuadro) % len(self.frames)
+        # Se guarda en caché la imagen estirada y girada hacia el rival para cada fotograma y largo
         clave = (idx, largo)
         if clave not in self._cache:
             base = self.frames[idx]
-            sup = pygame.transform.scale(base, (base.get_width() * self.ancho, largo))
-            self._cache[clave] = pygame.transform.rotate(sup, math.degrees(math.atan2(-dx, -dy)))
+            superficie_escalada = pygame.transform.scale(base, (base.get_width() * self.ancho, largo))
+            self._cache[clave] = pygame.transform.rotate(superficie_escalada, math.degrees(math.atan2(-dx, -dy)))
         img = self._cache[clave]
+        # El chorro se dibuja centrado entre su origen y su punta actual
         centro = (self.desde[0] + dx * fraccion_extendida / 2, self.desde[1] + dy * fraccion_extendida / 2)
         pantalla.blit(img, img.get_rect(center=(int(centro[0]), int(centro[1]))))
 
@@ -148,11 +166,12 @@ class Anillo:
         if frame_actual < self.frame_inicio or frame_actual >= self.frame_fin:
             return
         progreso = (frame_actual - self.frame_inicio) / self.duracion
-        r = int(_lerp(self.radio_inicial, self.radio_final, progreso))
-        lado = r * 2 + self.grosor * 2
-        sup = pygame.Surface((lado, lado), pygame.SRCALPHA)
-        pygame.draw.circle(sup, (*self.color, int(255 * (1 - progreso))), (lado // 2, lado // 2), r, self.grosor)
-        pantalla.blit(sup, sup.get_rect(center=self.centro))
+        # El radio crece con el tiempo; el color pierde opacidad hasta desaparecer
+        radio = int(_lerp(self.radio_inicial, self.radio_final, progreso))
+        lado = radio * 2 + self.grosor * 2
+        superficie = pygame.Surface((lado, lado), pygame.SRCALPHA)
+        pygame.draw.circle(superficie, (*self.color, int(255 * (1 - progreso))), (lado // 2, lado // 2), radio, self.grosor)
+        pantalla.blit(superficie, superficie.get_rect(center=self.centro))
 
 
 class Tajo:
@@ -166,10 +185,11 @@ class Tajo:
         if frame_actual < self.frame_inicio or frame_actual >= self.frame_fin:
             return
         progreso = (frame_actual - self.frame_inicio) / self.duracion
+        # Los arañazos se trazan en el primer 40% de la animación y luego solo se adelgazan
         crecer = min(1.0, progreso * 2.5)
         for i in range(3):
-            ox = (i - 1) * 46
-            x0, y0 = self.centro[0] + ox - self.largo // 3, self.centro[1] - self.largo // 2 + i * 8
+            desfase_x = (i - 1) * 46
+            x0, y0 = self.centro[0] + desfase_x - self.largo // 3, self.centro[1] - self.largo // 2 + i * 8
             x1 = x0 + int(self.largo * 0.55 * crecer)
             y1 = y0 + int(self.largo * crecer)
             ancho = max(2, int(10 * (1 - progreso)))
@@ -190,6 +210,7 @@ class Haz:
         progreso = (frame_actual - self.frame_inicio) / self.duracion
         progreso_extension = min(1.0, progreso * 4)
         progreso_apagado = min(1.0, (1 - progreso) * 4)
+        # La punta del rayo avanza rápido (primer cuarto) y el grosor se apaga al final con una ligera vibración
         punta = (_lerp(self.desde[0], self.hasta[0], progreso_extension), _lerp(self.desde[1], self.hasta[1], progreso_extension))
         grosor_actual = max(2, int(self.grosor * progreso_apagado * (0.85 + 0.15 * math.sin(frame_actual * 1.3))))
         pygame.draw.line(pantalla, self.color, self.desde, punta, grosor_actual)
@@ -202,28 +223,30 @@ class Ola:
     def __init__(self, frame_inicio, duracion, y0=330, y1=900):
         self.frame_inicio, self.duracion, self.y0, self.y1 = frame_inicio, duracion, y0, y1
         self.frame_fin = frame_inicio + duracion
-        self._sup = None
+        self._superficie = None
 
     def dibujar(self, pantalla, frame_actual):
         if frame_actual < self.frame_inicio or frame_actual >= self.frame_fin:
             return
         progreso = (frame_actual - self.frame_inicio) / self.duracion
         ancho = pantalla.get_width()
+        # frente: posición x del borde delantero de la ola, que cruza la pantalla
         frente = int(_lerp(-200, ancho + 300, progreso))
-        if self._sup is None:
-            self._sup = pygame.Surface((ancho, self.y1 - self.y0), pygame.SRCALPHA)
-        sup = self._sup
-        sup.fill((0, 0, 0, 0))
-        h = self.y1 - self.y0
-        pts = [(0, 0)]
-        for yy in range(0, h + 1, 20):
-            pts.append((frente + int(40 * math.sin(yy / 28 + frame_actual / 4)), yy))
-        pts.append((0, h))
-        pygame.draw.polygon(sup, (50, 130, 235, 170), pts)
-        for yy in range(0, h, 20):
-            xx = frente + int(40 * math.sin(yy / 28 + frame_actual / 4))
-            pygame.draw.circle(sup, (235, 245, 255, 230), (xx, yy), 14)
-        pantalla.blit(sup, (0, self.y0))
+        if self._superficie is None:
+            self._superficie = pygame.Surface((ancho, self.y1 - self.y0), pygame.SRCALPHA)
+        superficie = self._superficie
+        superficie.fill((0, 0, 0, 0))
+        alto_ola = self.y1 - self.y0
+        # Polígono azul cuyo borde derecho ondula con un seno; encima van círculos blancos de espuma
+        puntos = [(0, 0)]
+        for y_ola in range(0, alto_ola + 1, 20):
+            puntos.append((frente + int(40 * math.sin(y_ola / 28 + frame_actual / 4)), y_ola))
+        puntos.append((0, alto_ola))
+        pygame.draw.polygon(superficie, (50, 130, 235, 170), puntos)
+        for y_ola in range(0, alto_ola, 20):
+            x_ola = frente + int(40 * math.sin(y_ola / 28 + frame_actual / 4))
+            pygame.draw.circle(superficie, (235, 245, 255, 230), (x_ola, y_ola), 14)
+        pantalla.blit(superficie, (0, self.y0))
 
 
 class Flash:
@@ -232,17 +255,18 @@ class Flash:
     def __init__(self, frame_inicio, duracion, color=(255, 255, 255), alpha_maximo=200):
         self.frame_inicio, self.duracion, self.color, self.alpha_maximo = frame_inicio, duracion, color, alpha_maximo
         self.frame_fin = frame_inicio + duracion
-        self._sup = None
+        self._superficie = None
 
     def dibujar(self, pantalla, frame_actual):
         if frame_actual < self.frame_inicio or frame_actual >= self.frame_fin:
             return
         progreso = (frame_actual - self.frame_inicio) / self.duracion
-        if self._sup is None or self._sup.get_size() != pantalla.get_size():
-            self._sup = pygame.Surface(pantalla.get_size())
-            self._sup.fill(self.color)
-        self._sup.set_alpha(int(self.alpha_maximo * (1 - progreso)))
-        pantalla.blit(self._sup, (0, 0))
+        # Superficie del color del destello; su opacidad baja con el tiempo
+        if self._superficie is None or self._superficie.get_size() != pantalla.get_size():
+            self._superficie = pygame.Surface(pantalla.get_size())
+            self._superficie.fill(self.color)
+        self._superficie.set_alpha(int(self.alpha_maximo * (1 - progreso)))
+        pantalla.blit(self._superficie, (0, 0))
 
 
 class Orbita:
@@ -260,13 +284,14 @@ class Orbita:
         if not self.frames or frame_actual < self.frame_inicio or frame_actual >= self.frame_fin:
             return
         progreso = (frame_actual - self.frame_inicio) / self.duracion
-        r = _lerp(self.radio_inicial, self.radio_final, progreso)
+        radio = _lerp(self.radio_inicial, self.radio_final, progreso)
         for i in range(self.cantidad):
-            ang = 2 * math.pi * (i / self.cantidad + self.vueltas * progreso)
+            # Cada imagen ocupa un ángulo propio y todas giran 'vueltas' veces. El 0.7 aplasta el círculo para dar perspectiva
+            angulo = 2 * math.pi * (i / self.cantidad + self.vueltas * progreso)
             img = _escalar_con_cache(self.frames[(frame_actual // 4 + i) % len(self.frames)], self.escala)
-            cx = _lerp(self.centro[0], self.centro_final[0], progreso)
-            cy = _lerp(self.centro[1], self.centro_final[1], progreso)
-            pos = (cx + r * math.cos(ang), cy + r * math.sin(ang) * 0.7)
+            centro_x = _lerp(self.centro[0], self.centro_final[0], progreso)
+            centro_y = _lerp(self.centro[1], self.centro_final[1], progreso)
+            pos = (centro_x + radio * math.cos(angulo), centro_y + radio * math.sin(angulo) * 0.7)
             pantalla.blit(img, img.get_rect(center=(int(pos[0]), int(pos[1]))))
 
 
@@ -284,8 +309,8 @@ class RayoDescendente:
         if self.sprite is None or frame_actual < self.frame_inicio or frame_actual >= self.frame_fin:
             return
         if self._img is None:
-            w, h = self.sprite.get_size()
-            self._img = pygame.transform.scale(self.sprite, (max(1, int(w * self.escala)), max(1, int(h * self.escala * self.estiramiento))))
+            ancho_original, alto_original = self.sprite.get_size()
+            self._img = pygame.transform.scale(self.sprite, (max(1, int(ancho_original * self.escala)), max(1, int(alto_original * self.escala * self.estiramiento))))
         img = self._img
         ancho, alto = img.get_size()
         frames_transcurridos = frame_actual - self.frame_inicio
@@ -302,47 +327,61 @@ class RayoDescendente:
         pantalla.blit(img, (x, y + fila_desde), area=pygame.Rect(0, fila_desde, ancho, fila_hasta - fila_desde))
 
 
+# Funciones que arman los elementos de cada ataque. Devuelven un diccionario con:
+# elementos (lo que se dibuja), impacto (frame del golpe, donde se aplica el daño) y opciones (sacude, embestida, tile...)
 # ----------------- CONSTRUCTORES DE EFECTOS -----------------
+# Destello de impacto fijo sobre destino que crece y se desvanece (spread lo mueve un poco al azar)
 def _impacto(destino, ids_sprites, frame_inicio, escala=6, escala_fin=None, duracion=16, spread=0):
     pos = (destino[0] + random.randint(-spread, spread), destino[1] + random.randint(-spread, spread))
     return Particula(ids_sprites, frame_inicio, duracion, pos, pos, escala=escala, escala_fin=escala_fin or escala * 1.4, frames_por_cuadro=4, alpha_fin=0)
 
 
+# Ataque a distancia: lanza 'cantidad' proyectiles de origen a destino y un efecto de impacto al llegar cada uno
 def proyectil(origen, destino, ids_proyectil, cantidad=1, escala=5, duracion=24, separacion_frames=4, altura_arco=0, frames_por_cuadro=4, ids_impacto=(233,), escala_impacto=6,
               spread=0, aditivo=False, giro_por_frame=0, ida_vuelta=False, sacude=0, extra=None):
     elementos = []
+    # Cada proyectil sale separacion_frames después del anterior y cae en un punto algo disperso
     for k in range(cantidad):
-        s = random.randint(-spread, spread) if spread else 0
-        hasta = (destino[0] + s, destino[1] + s // 2)
+        variacion = random.randint(-spread, spread) if spread else 0
+        hasta = (destino[0] + variacion, destino[1] + variacion // 2)
         elementos.append(Particula(ids_proyectil, k * separacion_frames, duracion, origen, hasta, escala=escala, altura_arco=altura_arco, frames_por_cuadro=frames_por_cuadro,
                             aditivo=aditivo, giro_por_frame=giro_por_frame, ida_vuelta=ida_vuelta))
         if ids_impacto:
             elementos.append(_impacto(hasta, ids_impacto, k * separacion_frames + (duracion // 2 if ida_vuelta else duracion), escala=escala_impacto))
     elementos += extra or []
+    # Con ida_vuelta (bumerán) el golpe ocurre a mitad del recorrido
     return {"elementos": elementos, "impacto": duracion // 2 if ida_vuelta else duracion, "sacude": sacude}
 
 
-def contacto(origen, destino, golpe, escala=7, lunge=True, sacude=8, extra=None, frame_impacto=12):
+# Ataque cuerpo a cuerpo: el atacante embiste y el golpe aparece sobre el rival en frame_impacto
+def contacto(origen, destino, golpe, escala=7, embestida=True, sacude=8, extra=None, frame_impacto=12):
     elementos = [_impacto(destino, golpe, frame_impacto, escala=escala, duracion=16)]
     elementos += extra or []
-    return {"elementos": elementos, "impacto": frame_impacto, "lunge": lunge, "sacude": sacude}
+    return {"elementos": elementos, "impacto": frame_impacto, "embestida": embestida, "sacude": sacude}
 
 
+# Habilidad de Estado: no hace daño, muestra una baldosa de estadística (sube o baja) sobre un Pokémon
 def estado(sobre, tile, sube, extra=None, duracion=70):
     return {"elementos": extra or [], "impacto": 10, "tile": (sobre, tile, sube, duracion)}
 
 
 # ----------------- Recrear cada habilidad -----------------
+# Recibe el nombre y tipo de la habilidad y quién la usa, y devuelve el efecto correspondiente.
+# Está ordenada por tipo y al final hay un efecto genérico de respaldo
 def construir(nombre, tipo, atacante):
+    # origen = centro del atacante, destino = centro del rival
     origen, destino = CENTRO[atacante], CENTRO[_oponente(atacante)]
     rival = _oponente(atacante)
-    dx = 1 if destino[0] > origen[0] else -1
-    punto_salida = (origen[0] + dx * 120, origen[1] - 20)          # salida del proyectil (de cara al rival)
+    # 1 si el rival está a la derecha del atacante, -1 si está a la izquierda
+    direccion_x = 1 if destino[0] > origen[0] else -1
+    punto_salida = (origen[0] + direccion_x * 120, origen[1] - 20)          # salida del proyectil (de cara al rival)
 
+    # Atajo para crear la baldosa de una habilidad de Estado
     def tile(sobre, nombre_tile, sube, extra=None):
         return estado(sobre, nombre_tile, sube, extra)
 
     # ---------- NORMAL ----------
+    # Ataques de contacto: el atacante embiste y el rival se sacude
     if nombre in ("Placaje", "Tacleada", "Constricción"):
         return contacto(origen, destino, (), sacude = 10)
     if nombre in ("Patada",):
@@ -363,17 +402,19 @@ def construir(nombre, tipo, atacante):
     if nombre == "Bofetón":
         return contacto(origen, destino, (), extra=[Particula((192,), 4, 14, (destino[0] - 90, destino[1]), (destino[0] + 90, destino[1]), escala=7)])
     if nombre == "Látigo":
-        return contacto(origen, destino, (), lunge=False, extra=[Particula((50, 51, 52), 2, 16, punto_salida, destino, escala = 3, frames_por_cuadro=3)])
+        return contacto(origen, destino, (), embestida=False, extra=[Particula((50, 51, 52), 2, 16, punto_salida, destino, escala = 3, frames_por_cuadro=3)])
     if nombre == "Hueso Palo":
         return proyectil(origen, destino, (80,), escala = 3, duracion = 22, giro_por_frame = 28, ids_impacto = (), sacude = 8)
 
     # ---------- FUEGO ----------
+    # Ráfaga de 9 llamas con algo de dispersión
     if nombre == "Lanzallamas":
         return proyectil(punto_salida, destino, (38, 39, 40), cantidad=9, escala=4, duracion=22, separacion_frames=3, spread=24, ids_impacto=(43,), escala_impacto=3, aditivo=False)
     
     if nombre == "Ascuas":
         return proyectil(punto_salida, destino, (57, 58, 38), cantidad=6, escala=4, duracion=22, separacion_frames=5, spread=40, ids_impacto=(58,), escala_impacto=5)
     
+    # Anillo de llamas girando que se cierra sobre el rival
     if nombre == "Giro Fuego":
         return {"elementos": [Orbita((38, 39, 40), destino, 0, 40, cantidad = 8, radio_inicial = 260, radio_final = 30, escala = 4), Flash(40, 10, (255, 150, 60), 90)],"impacto": 40, "sacude": 6}
     
@@ -414,8 +455,8 @@ def construir(nombre, tipo, atacante):
         return proyectil(punto_salida, destino, (112, 22, 113), cantidad = 10, escala = 2.5, duracion = 26, separacion_frames = 3, spread = 60, ids_impacto = (9,), escala_impacto = 3, frames_por_cuadro = 6)
     if nombre == "Hidrobomba":
         # Chorro fijo desde la cara del atacante hasta el rival; solo cambian los 4 fotogramas
-        col = ("hidro0", "hidro1", "hidro2", "hidro3")
-        return {"elementos": [Chorro(col, CARA[atacante], CARA[rival], 0, 46, ancho = 8, frames_por_cuadro = 3)],
+        fotogramas_hidro = ("hidro0", "hidro1", "hidro2", "hidro3")
+        return {"elementos": [Chorro(fotogramas_hidro, CARA[atacante], CARA[rival], 0, 46, ancho = 8, frames_por_cuadro = 3)],
                 "impacto": 8, "sacude": 10, "sacude_duracion": 36}
     if nombre == "Surf":
         # Ola animada con los 14 fotogramas de la hoja (surf00..surf13): viaja del atacante al rival creciendo
@@ -435,10 +476,10 @@ def construir(nombre, tipo, atacante):
 
     # ---------- PLANTA ----------
     if nombre in ("Látigo Cepa", "Látigo Cerval"):
-        grande = 8 if nombre == "Látigo Cerval" else 6
-        return contacto(origen, destino, (234,), lunge = False, sacude = 10,
-                        extra=[Particula((50, 51, 52), 0, 14, (destino[0] - 140, destino[1] - 80), (destino[0] + 60, destino[1] + 60), escala=grande, frames_por_cuadro=3),
-                               Particula((51, 52, 50), 6, 14, (destino[0] + 140, destino[1] - 80), (destino[0] - 60, destino[1] + 60), escala=grande, frames_por_cuadro=3)], frame_impacto=10)
+        escala_latigo = 8 if nombre == "Látigo Cerval" else 6
+        return contacto(origen, destino, (234,), embestida = False, sacude = 10,
+                        extra=[Particula((50, 51, 52), 0, 14, (destino[0] - 140, destino[1] - 80), (destino[0] + 60, destino[1] + 60), escala=escala_latigo, frames_por_cuadro=3),
+                               Particula((51, 52, 50), 6, 14, (destino[0] + 140, destino[1] - 80), (destino[0] - 60, destino[1] + 60), escala=escala_latigo, frames_por_cuadro=3)], frame_impacto=10)
     if nombre == "Hoja Afilada":
         return proyectil(punto_salida, destino, (136, 137, 138, 139), cantidad=8, escala=4, duracion=22, separacion_frames=3, spread=50, altura_arco=30, giro_por_frame=25, ids_impacto=(234,), escala_impacto=5)
     if nombre == "Rayo Solar":
@@ -446,6 +487,7 @@ def construir(nombre, tipo, atacante):
                        Flash(30, 20, (255, 250, 170), 130),
                        Haz(punto_salida, destino, 30, 34, (255, 240, 120), 70), _impacto(destino, (233,), 36, escala=8)],
                 "impacto": 32, "sacude": 12}
+    # Energía que sale del rival hacia el atacante; más partículas cuanto más fuerte es el ataque
     if nombre in ("Absorber", "Megaagotar", "Gigadrenado"):
         cantidad = {"Absorber": 6, "Megaagotar": 9, "Gigadrenado": 12}[nombre]
         return {"elementos": [_impacto(destino, (200, 202), 0, escala = 5, duracion = 14)] + 
@@ -461,6 +503,7 @@ def construir(nombre, tipo, atacante):
                       [Flash(0, 40, (200, 120, 255), 90)], "impacto": 16, "sacude": 10, "temblor": "objetivo"}
 
     # ---------- ELÉCTRICO ----------
+    # Rayo que cae desde arriba sobre el rival
     if nombre == "Impactrueno":
         return {"elementos": [RayoDescendente("a125_arriba", (destino[0], destino[1] + 20), 0, 18, escala = 6, frames_crecer = 5, frames_borrar = 6, amplitud_temblor = 3, estiramiento = 1.5),
                        Flash(5, 8, (255, 255, 160), 110)], "impacto": 5, "sacude": 8, "temblor": "objetivo"}
@@ -494,10 +537,11 @@ def construir(nombre, tipo, atacante):
 
     # ---------- TIERRA ----------
     if nombre in ("Disparo Lodo", "Bofetón Lodo"):
-        r = proyectil(punto_salida, destino, (238, 237, 236), cantidad=4, escala=5, duracion=22, separacion_frames=5, altura_arco=60, spread=30, ids_impacto=(238,), escala_impacto=6, giro_por_frame=10, sacude=8)
+        resultado = proyectil(punto_salida, destino, (238, 237, 236), cantidad=4, escala=5, duracion=22, separacion_frames=5, altura_arco=60, spread=30, ids_impacto=(238,), escala_impacto=6, giro_por_frame=10, sacude=8)
         if nombre == "Bofetón Lodo":
-            r["elementos"].append(Particula((192,), 6, 14, (destino[0] - 90, destino[1]), (destino[0] + 90, destino[1]), escala=7))
-        return r
+            resultado["elementos"].append(Particula((192,), 6, 14, (destino[0] - 90, destino[1]), (destino[0] + 90, destino[1]), escala=7))
+        return resultado
+    # Rocas que saltan por el campo y sacuden a ambos Pokémon (más fuerte con Terremoto)
     if nombre in ("Terremoto", "Terratemblor"):
         fuerte = nombre == "Terremoto"
         cantidad = 10 if fuerte else 5
@@ -508,10 +552,12 @@ def construir(nombre, tipo, atacante):
             elementos.append(Particula((176, 177, 178, 179, 236, 237), k * 3, 26, (x, y), (x + random.randint(-60, 60), y - random.randint(80, 200)),
                                 escala=5, altura_arco=random.randint(60, 140), alpha_fin=0, giro_por_frame=random.choice((-9, 9))))
         return {"elementos": elementos, "impacto": 8, "sacude": 26 if fuerte else 14, "sacude_duracion": 50 if fuerte else 36, "sacude_a": "ambos"}
+    # El hueso viaja hacia el rival y vuelve (ida_vuelta)
     if nombre == "Huesomerang":
         return proyectil(punto_salida, destino, (80,), cantidad = 1, escala = 6, duracion = 44, giro_por_frame = 34, ida_vuelta = True, ids_impacto = (233,), sacude = 10, altura_arco = 60)
 
     # ---------- ESTADO (baldosas de estadísticas) ----------
+    # Habilidades de Estado: cada una sube una estadística propia (baldosa hacia arriba) o baja una del rival (hacia abajo)
     if tipo == "Estado":
         if nombre in ("Foco Energía", "Acuchillar"):
             return tile(atacante, "ataque", True)
@@ -547,6 +593,7 @@ def construir(nombre, tipo, atacante):
         return tile(atacante, "mezcla", True)
 
     # ---------- RESPALDO POR TIPO ----------
+    # Si la habilidad no tiene efecto propio se usa uno genérico según su tipo
     respaldo = {"Fuego": ((38, 39, 40), (43,)), "Agua": ((3, 2, 1), (7,)), "Planta": ((136, 137), (234,)),
                 "Eléctrico": ((101,), (205, 206)), "Tierra": ((238, 237), (233,)), "Psíquico": ((101,), (233,))}
     ids_proyectil, ids_impacto = respaldo.get(tipo, ((145,), (233,)))
@@ -554,12 +601,14 @@ def construir(nombre, tipo, atacante):
 
 
 # --------- Gestor ---------
+# Estado de la animación en curso: sus elementos, el frame actual y las opciones (sacudida, embestida, baldosa...)
 class _Efecto:
     def __init__(self, atacante, spec, al_impactar):
         self.atacante = atacante
         self.elementos = spec["elementos"]
+        # Frame en el que ocurre el golpe: ahí se aplica el daño
         self.impacto = spec.get("impacto", 10)
-        self.lunge = spec.get("lunge", False)
+        self.embestida = spec.get("embestida", False)
         self.vaiven = spec.get("vaiven")           # (amplitud px, duración): el atacante va de lado a lado
         self.sacude = spec.get("sacude", 0)
         self.sacude_duracion = spec.get("sacude_duracion", 22)
@@ -568,13 +617,15 @@ class _Efecto:
         self.tile = spec.get("tile")
         self.al_impactar = al_impactar
         self.frame_actual = 0
-        frame_fin = max([e.frame_fin for e in self.elementos] + [self.impacto + 14])
+        # La animación termina cuando acaba el último elemento (o 14 frames después del impacto)
+        frame_fin = max([elemento.frame_fin for elemento in self.elementos] + [self.impacto + 14])
         if self.tile:
             frame_fin = max(frame_fin, self.tile[3])
         self.frame_fin = frame_fin
         self.impacto_notificado = False
 
 
+# Controla qué efecto se reproduce, lo avanza frame a frame y calcula los desplazamientos de los pokémons
 class GestorEfectos:
     def __init__(self):
         self.actual = None
@@ -582,86 +633,101 @@ class GestorEfectos:
         self._mascaras = {}
 
     # --------- Control ---------
+    # True mientras hay una animación (la interfaz bloquea los botones)
     def ocupado(self):
         return self.actual is not None
 
+    # Construye y empieza el efecto de una habilidad; al_impactar se llama cuando ocurre el golpe
     def lanzar(self, atacante, nombre, tipo, al_impactar=None):
         self.actual = _Efecto(atacante, construir(nombre, tipo, atacante), al_impactar)
 
+    # Se llama una vez por frame: avanza la animación y avisa del impacto
     def actualizar(self):
-        e = self.actual
-        if e is None:
+        efecto = self.actual
+        if efecto is None:
             return
-        if e.frame_actual == e.impacto and not e.impacto_notificado:
-            e.impacto_notificado = True
-            if e.al_impactar:
-                e.al_impactar()
-        e.frame_actual += 1
-        if e.frame_actual >= e.frame_fin:
-            if not e.impacto_notificado and e.al_impactar:   # por seguridad, nunca se pierde el golpe
-                e.al_impactar()
+        # En el frame del impacto se avisa una sola vez (aquí el motor aplica el daño)
+        if efecto.frame_actual == efecto.impacto and not efecto.impacto_notificado:
+            efecto.impacto_notificado = True
+            if efecto.al_impactar:
+                efecto.al_impactar()
+        efecto.frame_actual += 1
+        # Al terminar se borra el efecto; por seguridad, si el golpe no se notificó se aplica ahora
+        if efecto.frame_actual >= efecto.frame_fin:
+            if not efecto.impacto_notificado and efecto.al_impactar:   # por seguridad, nunca se pierde el golpe
+                efecto.al_impactar()
+            # actual: el efecto en curso (None si no hay animación)
             self.actual = None
 
     # --------- Desplazamientos de los Pokemons ---------
+    # Devuelve cuánto (dx, dy) hay que mover a un Pokémon en este frame por embestida, vaivén, sacudida o temblor
     def desplazamiento(self, quien):
-        e = self.actual
-        if e is None:
+        efecto = self.actual
+        if efecto is None:
             return (0, 0)
         dx = dy = 0
-        objetivo = _oponente(e.atacante)
-        if e.lunge and quien == e.atacante:
-            progreso = min(1.0, e.frame_actual / (e.impacto + 8))
-            origen, destino = CENTRO[e.atacante], CENTRO[objetivo]
-            f = math.sin(math.pi * progreso) * 0.28
-            dx, dy = (destino[0] - origen[0]) * f, (destino[1] - origen[1]) * f
-        if e.vaiven and quien == e.atacante and e.frame_actual < e.vaiven[1]:
-            progreso = e.frame_actual / e.vaiven[1]
-            dx += e.vaiven[0] * math.sin(2 * math.pi * 3 * progreso)    # 3 idas y vueltas, termina en su sitio
-        if e.sacude and e.frame_actual >= e.impacto and e.frame_actual < e.impacto + e.sacude_duracion:
-            quienes = (e.atacante, objetivo) if e.sacude_a == "ambos" else (objetivo,)
+        objetivo = _oponente(efecto.atacante)
+        # Embestida: el atacante avanza hacia el rival y vuelve (curva seno), hasta el 28% del trayecto
+        if efecto.embestida and quien == efecto.atacante:
+            progreso = min(1.0, efecto.frame_actual / (efecto.impacto + 8))
+            origen, destino = CENTRO[efecto.atacante], CENTRO[objetivo]
+            factor_embestida = math.sin(math.pi * progreso) * 0.28
+            dx, dy = (destino[0] - origen[0]) * factor_embestida, (destino[1] - origen[1]) * factor_embestida
+        if efecto.vaiven and quien == efecto.atacante and efecto.frame_actual < efecto.vaiven[1]:
+            progreso = efecto.frame_actual / efecto.vaiven[1]
+            dx += efecto.vaiven[0] * math.sin(2 * math.pi * 3 * progreso)    # 3 idas y vueltas, termina en su sitio
+        # Sacudida al recibir el golpe: aleatoria y cada vez más pequeña
+        if efecto.sacude and efecto.frame_actual >= efecto.impacto and efecto.frame_actual < efecto.impacto + efecto.sacude_duracion:
+            quienes = (efecto.atacante, objetivo) if efecto.sacude_a == "ambos" else (objetivo,)
             if quien in quienes:
-                resto = 1 - (e.frame_actual - e.impacto) / e.sacude_duracion
-                amp = e.sacude * resto
-                dx += random.uniform(-amp, amp)
-                dy += random.uniform(-amp, amp) * 0.6
-        if e.temblor == "objetivo" and quien == objetivo and e.impacto <= e.frame_actual < e.impacto + 26:
-            dx += math.sin(e.frame_actual * 1.7) * 14
+                fraccion_restante = 1 - (efecto.frame_actual - efecto.impacto) / efecto.sacude_duracion
+                amplitud = efecto.sacude * fraccion_restante
+                dx += random.uniform(-amplitud, amplitud)
+                dy += random.uniform(-amplitud, amplitud) * 0.6
+        # Temblor lateral del objetivo (ataques eléctricos o psíquicos)
+        if efecto.temblor == "objetivo" and quien == objetivo and efecto.impacto <= efecto.frame_actual < efecto.impacto + 26:
+            dx += math.sin(efecto.frame_actual * 1.7) * 14
         return (int(dx), int(dy))
 
     # --------- dibujo ---------
-    def dibujar_sobre_sprites(self, pantalla, sprites):
-        """Baldosas de estadísticas sobre la silueta del Pokémon. sprites = {"ia": (surf, pos), ...}"""
-        e = self.actual
-        if e is None or not e.tile:
+    def dibujar_sobre_pokemons(self, pantalla, pokemons):
+        """Baldosas de estadísticas sobre la silueta del Pokémon. pokemons = {"ia": (imagen, pos), ...}"""
+        efecto = self.actual
+        if efecto is None or not efecto.tile:
             return
-        sobre, nombre_tile, sube, duracion = e.tile
-        if e.frame_actual < e.impacto - 4 or sobre not in sprites:
+        sobre, nombre_tile, sube, duracion = efecto.tile
+        if efecto.frame_actual < efecto.impacto - 4 or sobre not in pokemons:
             return
-        surf, pos = sprites[sobre]
-        frames_transcurridos = e.frame_actual - (e.impacto - 4)
+        imagen_pokemon, pos = pokemons[sobre]
+        frames_transcurridos = efecto.frame_actual - (efecto.impacto - 4)
         progreso = frames_transcurridos / duracion
+        # Opacidad: aparece rápido y se desvanece al final
         alfa = int(190 * min(1.0, progreso * 6, (1 - progreso) * 4))
         if alfa <= 0:
             return
-        base = self._tile(nombre_tile, surf.get_width())
-        w, h = surf.get_size()
-        capa = pygame.Surface((w, h), pygame.SRCALPHA)
+        base = self._tile(nombre_tile, imagen_pokemon.get_width())
+        ancho, alto = imagen_pokemon.get_size()
+        # Capa donde se repite la baldosa en vertical y se desplaza para dar sensación de subir o bajar
+        capa = pygame.Surface((ancho, alto), pygame.SRCALPHA)
         paso = base.get_height()
-        desp = (-frames_transcurridos * 7 if sube else frames_transcurridos * 7) % paso
-        for yy in range(-paso, h + paso, paso):
-            capa.blit(base, (0, yy + desp))
-        capa.blit(self._mascara(surf), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        desplazamiento_y = (-frames_transcurridos * 7 if sube else frames_transcurridos * 7) % paso
+        for y_baldosa in range(-paso, alto + paso, paso):
+            capa.blit(base, (0, y_baldosa + desplazamiento_y))
+        # Se recorta con la silueta del Pokémon: la baldosa solo se ve sobre su cuerpo
+        capa.blit(self._mascara(imagen_pokemon), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         capa.set_alpha(alfa)
         pantalla.blit(capa, pos)
 
+    # Dibuja todos los elementos del efecto en curso en su frame actual
     def dibujar(self, pantalla):
-        e = self.actual
-        if e is None:
+        efecto = self.actual
+        if efecto is None:
             return
-        for elemento in e.elementos:
-            elemento.dibujar(pantalla, e.frame_actual)
+        for elemento in efecto.elementos:
+            elemento.dibujar(pantalla, efecto.frame_actual)
 
     # --- utilidades ---
+    # Devuelve la baldosa de estadística como cuadrado del ancho pedido (si falta la imagen usa un cuadro blanco)
     def _tile(self, nombre, ancho):
         clave = (nombre, ancho)
         if clave not in self._tiles:
@@ -672,9 +738,10 @@ class GestorEfectos:
             self._tiles[clave] = pygame.transform.scale(img, (ancho, ancho))
         return self._tiles[clave]
 
-    def _mascara(self, surf):
-        clave = id(surf)
+    # Convierte la silueta del Pokémon en una imagen blanca/transparente, que sirve para recortar la baldosa
+    def _mascara(self, imagen_pokemon):
+        clave = id(imagen_pokemon)
         if clave not in self._mascaras:
-            m = pygame.mask.from_surface(surf, 20)
-            self._mascaras[clave] = m.to_surface(setcolor=(255, 255, 255, 255), unsetcolor=(0, 0, 0, 0))
+            mascara = pygame.mask.from_surface(imagen_pokemon, 20)
+            self._mascaras[clave] = mascara.to_surface(setcolor=(255, 255, 255, 255), unsetcolor=(0, 0, 0, 0))
         return self._mascaras[clave]
