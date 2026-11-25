@@ -83,9 +83,9 @@ def main():
     escenario_sel = 0
     escena_arena = ui.EscenaArena()
 
-    # Pantalla de selección de equipo: elemento resaltado, scroll de la lista y equipo elegido hasta ahora
+    # Pantalla de selección de equipo: se crea al salir de la arena; equipo_seleccionado se llena al completar el equipo
     seleccion_idx = 0
-    scroll_offset_sel = 0
+    escena_seleccion = None
     equipo_seleccionado = []
 
     # Biblioteca: sección (tipo) y Pokémon resaltados, si la ficha está abierta y el scroll
@@ -149,12 +149,31 @@ def main():
                         escenario_sel = escena_arena.escenario
                         estado_app = "seleccion"
                         seleccion_idx = 0
-                        scroll_offset_sel = 0
-                        equipo_seleccionado = []
+                        escena_seleccion = ui.EscenaSeleccion(modo_juego)
                 # Clic derecho = volver al menú principal
                 elif evento.button == 3:
                     estado_app = "menu_principal"
                     seleccion_idx = 0
+
+            # --- Mouse en la selección de pokémons ---
+            elif evento.type == pygame.MOUSEMOTION and estado_app == "seleccion":
+                escena_seleccion.pasar_mouse(evento.pos)
+
+            elif evento.type == pygame.MOUSEWHEEL and estado_app == "seleccion":
+                escena_seleccion.desplazar(evento.y)
+
+            elif evento.type == pygame.MOUSEBUTTONDOWN and estado_app == "seleccion":
+                if evento.button == 1:
+                    # Clic sobre un pokémon: lo elige (o lo quita si ya estaba); al completar el equipo se pasa a las estadísticas
+                    resultado = escena_seleccion.clic(evento.pos)
+                    if resultado is not None:
+                        sonido_seleccion()
+                    if resultado == "completo":
+                        equipo_seleccionado = list(escena_seleccion.equipo)
+                        estado_app = "estadisticas"
+                # Clic derecho = volver a la arena (como ESC)
+                elif evento.button == 3:
+                    estado_app = "arena"
 
             # --- Mouse en el combate ---
             elif evento.type == pygame.MOUSEMOTION and estado_app == "combate":
@@ -190,51 +209,21 @@ def main():
                             escenario_sel = escena_arena.escenario
                             estado_app = "seleccion"
                             seleccion_idx = 0
-                            scroll_offset_sel = 0
-                            equipo_seleccionado = []
+                            escena_seleccion = ui.EscenaSeleccion(modo_juego)
                     else:
                         escena_arena.mover(evento.key)
 
                 elif estado_app == "seleccion":
-                    # El cursor recorre la lista de todos los pokémons y da la vuelta al llegar a los extremos
-                    limite = len(LISTA_PLANA_POKES)
                     if evento.key == pygame.K_ESCAPE:
                         estado_app = "arena"
-                    elif evento.key == pygame.K_DOWN:
-                        seleccion_idx = (seleccion_idx + 1) % limite
-                    elif evento.key == pygame.K_UP:
-                        seleccion_idx = (seleccion_idx - 1) % limite
                     elif evento.key == pygame.K_RETURN:
                         sonido_seleccion()
-                        pokemon_elegido = LISTA_PLANA_POKES[seleccion_idx]
-                        # Evita repetir el mismo Pokémon en el equipo
-                        if pokemon_elegido not in equipo_seleccionado:
-                            equipo_seleccionado.append(pokemon_elegido)
-
-                        # 1v1 necesita 1 Pokémon y 3v3 necesita 3; al completarlos se muestran las estadísticas
-                        meta_equipo = 1 if modo_juego == "1v1" else 3
-                        if len(equipo_seleccionado) == meta_equipo:
+                        # Elige (o quita) el pokémon resaltado; con el equipo completo se muestran las estadísticas
+                        if escena_seleccion.elegir() == "completo":
+                            equipo_seleccionado = list(escena_seleccion.equipo)
                             estado_app = "estadisticas"
-
-                    # Calcula la altura (y) del Pokémon resaltado dentro de la lista, para mover el scroll y que no se salga de la vista
-                    y_item_sel = 0
-                    idx_actual = 0
-                    for tipo_seccion, pokemons_seccion in SECCIONES_POKEMON.items():
-                        y_item_sel += 45
-                        for nombre_pokemon in pokemons_seccion:
-                            if idx_actual == seleccion_idx:
-                                break
-                            y_item_sel += 50
-                            idx_actual += 1
-                        if idx_actual == seleccion_idx:
-                            break
-                        y_item_sel += 20
-
-                    # Si se sale por abajo, baja el scroll; si se sale por arriba, lo sube
-                    if y_item_sel - scroll_offset_sel > 800:
-                        scroll_offset_sel = y_item_sel - 800
-                    elif y_item_sel - scroll_offset_sel < 60:
-                        scroll_offset_sel = max(0, y_item_sel - 60)
+                    else:
+                        escena_seleccion.mover(evento.key)
 
                 elif estado_app == "estadisticas":
                     if evento.key == pygame.K_RETURN or evento.key == pygame.K_SPACE:
@@ -351,7 +340,7 @@ def main():
             escena_arena.dibujar(pantalla)
 
         elif estado_app == "seleccion":
-            ui.dibujar_seleccion(pantalla, equipo_seleccionado, seleccion_idx, scroll_offset_sel, modo_juego)
+            escena_seleccion.dibujar(pantalla)
 
         elif estado_app == "estadisticas":
             ui.dibujar_estadisticas(pantalla, equipo_seleccionado)
