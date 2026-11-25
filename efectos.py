@@ -1,6 +1,6 @@
 # ----------------- EFECTOS VISUALES DE LAS HABILIDADES -----------------
-# Usa los sprites recortados en assets/efectos/ (ver recortar_efectos.py).
-#   assets/efectos/ataque/aNNN.png  -> sprites sueltos de ataques
+# Usa las imágenes recortadas en assets/efectos/ (ver recortar_efectos.py).
+#   assets/efectos/ataque/aNNN.png  -> imágenes sueltas de ataques
 #   assets/efectos/stats/<stat>.png -> baldosas de subida/bajada de estadísticas
 #
 # Uso desde la interfaz:
@@ -37,7 +37,7 @@ def _cargar(grupo, nombre):
 
 
 # Carga la imagen de un ataque: n puede ser un número (a001, a002...) o el nombre de un archivo
-def cargar_sprite_ataque(n):
+def cargar_pokemon_ataque(n):
     return _cargar("ataque", n if isinstance(n, str) else f"a{n:03d}")
 
 
@@ -75,12 +75,12 @@ def _oponente(lado):
 # ----------------- ELEMENTOS ANIMADOS -----------------
 # Elemento animado básico: una imagen (o varios fotogramas) que se mueve, crece, rota y se desvanece
 class Particula:
-    """Un sprite (o varios fotogramas) que viaja de 'desde' a 'hasta'."""
+    """Una imagen (o varios fotogramas) que viaja de 'desde' a 'hasta'."""
 
-    def __init__(self, ids_sprites, frame_inicio, duracion, desde, hasta, escala=5, escala_fin=None, altura_arco=0, frames_por_cuadro=4,
+    def __init__(self, ids_pokemons, frame_inicio, duracion, desde, hasta, escala=5, escala_fin=None, altura_arco=0, frames_por_cuadro=4,
                  alpha_fin=255, angulo=0, giro_por_frame=0, aditivo=False, amplitud_temblor=0, ida_vuelta=False, tinte=None):
-        self.frames = [s for s in (cargar_sprite_ataque(i) for i in ids_sprites) if s is not None]
-        self.tinte = tinte          # (r, g, b) para cambiar el color del sprite, ej. (255, 70, 50) = rojo
+        self.frames = [s for s in (cargar_pokemon_ataque(i) for i in ids_pokemons) if s is not None]
+        self.tinte = tinte          # (r, g, b) para cambiar el color de la imagen, ej. (255, 70, 50) = rojo
         self.frame_inicio, self.duracion = frame_inicio, duracion
         self.desde, self.hasta = desde, hasta
         self.escala, self.escala_fin = escala, escala if escala_fin is None else escala_fin
@@ -125,10 +125,10 @@ class Particula:
 
 class Chorro:
     """Chorro fijo: sale de 'desde', se estira hasta 'hasta' y solo cambia de fotograma.
-    El sprite es vertical con la cresta arriba; la cresta queda en el extremo del rival."""
+    La imagen es vertical con la cresta arriba; la cresta queda en el extremo del rival."""
 
-    def __init__(self, ids_sprites, desde, hasta, frame_inicio, duracion, ancho=6, frames_por_cuadro=3, frames_crecimiento=4):
-        self.frames = [s for s in (cargar_sprite_ataque(i) for i in ids_sprites) if s is not None]
+    def __init__(self, ids_pokemons, desde, hasta, frame_inicio, duracion, ancho=6, frames_por_cuadro=3, frames_crecimiento=4):
+        self.frames = [s for s in (cargar_pokemon_ataque(i) for i in ids_pokemons) if s is not None]
         self.desde, self.hasta, self.frame_inicio, self.duracion = desde, hasta, frame_inicio, duracion
         self.ancho, self.frames_por_cuadro, self.frames_crecimiento = ancho, frames_por_cuadro, frames_crecimiento
         self.frame_fin = frame_inicio + duracion
@@ -270,11 +270,11 @@ class Flash:
 
 
 class Orbita:
-    """Sprites girando alrededor de un punto (Giro Fuego). Si se da centro_final, el anillo viaja
+    """Imágenes girando alrededor de un punto (Giro Fuego). Si se da centro_final, el anillo viaja
     desde 'centro' hasta 'centro_final' mientras gira (Llamarada)."""
 
-    def __init__(self, ids_sprites, centro, frame_inicio, duracion, cantidad=8, radio_inicial=260, radio_final=40, escala=4, vueltas=2.0, centro_final=None):
-        self.frames = [s for s in (cargar_sprite_ataque(i) for i in ids_sprites) if s is not None]
+    def __init__(self, ids_pokemons, centro, frame_inicio, duracion, cantidad=8, radio_inicial=260, radio_final=40, escala=4, vueltas=2.0, centro_final=None):
+        self.frames = [s for s in (cargar_pokemon_ataque(i) for i in ids_pokemons) if s is not None]
         self.centro, self.frame_inicio, self.duracion, self.cantidad = centro, frame_inicio, duracion, cantidad
         self.centro_final = centro if centro_final is None else centro_final
         self.radio_inicial, self.radio_final, self.escala, self.vueltas = radio_inicial, radio_final, escala, vueltas
@@ -298,23 +298,23 @@ class Orbita:
 class RayoDescendente:
     # Rayo que se dibuja de arriba hacia abajo, se mantiene y se borra de arriba hacia abajo
 
-    def __init__(self, id_sprite, base, frame_inicio, duracion, escala=6, frames_crecer=5, frames_borrar=6, amplitud_temblor=0, estiramiento=1.0):
-        self.sprite = cargar_sprite_ataque(id_sprite)
+    def __init__(self, id_pokemon, base, frame_inicio, duracion, escala=6, frames_crecer=5, frames_borrar=6, amplitud_temblor=0, estiramiento=1.0):
+        self.pokemon = cargar_pokemon_ataque(id_pokemon)
         self.estiramiento, self._img = estiramiento, None                   # estiramiento > 1 alarga solo en vertical
         self.base, self.frame_inicio, self.duracion, self.escala = base, frame_inicio, duracion, escala
         self.frames_crecer, self.frames_borrar, self.amplitud_temblor = frames_crecer, frames_borrar, amplitud_temblor
         self.frame_fin = frame_inicio + duracion
 
     def dibujar(self, pantalla, frame_actual):
-        if self.sprite is None or frame_actual < self.frame_inicio or frame_actual >= self.frame_fin:
+        if self.pokemon is None or frame_actual < self.frame_inicio or frame_actual >= self.frame_fin:
             return
         if self._img is None:
-            ancho_original, alto_original = self.sprite.get_size()
-            self._img = pygame.transform.scale(self.sprite, (max(1, int(ancho_original * self.escala)), max(1, int(alto_original * self.escala * self.estiramiento))))
+            ancho_original, alto_original = self.pokemon.get_size()
+            self._img = pygame.transform.scale(self.pokemon, (max(1, int(ancho_original * self.escala)), max(1, int(alto_original * self.escala * self.estiramiento))))
         img = self._img
         ancho, alto = img.get_size()
         frames_transcurridos = frame_actual - self.frame_inicio
-        fila_desde, fila_hasta = 0, alto                                   # filas visibles del sprite
+        fila_desde, fila_hasta = 0, alto                                   # filas visibles de la imagen
         if frames_transcurridos < self.frames_crecer:                      # se dibuja de arriba hacia abajo
             fila_hasta = math.ceil(alto * (frames_transcurridos + 1) / self.frames_crecer)
         elif frames_transcurridos >= self.duracion - self.frames_borrar:   # se borra de arriba hacia abajo
@@ -331,9 +331,9 @@ class RayoDescendente:
 # elementos (lo que se dibuja), impacto (frame del golpe, donde se aplica el daño) y opciones (sacude, embestida, tile...)
 # ----------------- CONSTRUCTORES DE EFECTOS -----------------
 # Destello de impacto fijo sobre destino que crece y se desvanece (spread lo mueve un poco al azar)
-def _impacto(destino, ids_sprites, frame_inicio, escala=6, escala_fin=None, duracion=16, spread=0):
+def _impacto(destino, ids_pokemons, frame_inicio, escala=6, escala_fin=None, duracion=16, spread=0):
     pos = (destino[0] + random.randint(-spread, spread), destino[1] + random.randint(-spread, spread))
-    return Particula(ids_sprites, frame_inicio, duracion, pos, pos, escala=escala, escala_fin=escala_fin or escala * 1.4, frames_por_cuadro=4, alpha_fin=0)
+    return Particula(ids_pokemons, frame_inicio, duracion, pos, pos, escala=escala, escala_fin=escala_fin or escala * 1.4, frames_por_cuadro=4, alpha_fin=0)
 
 
 # Ataque a distancia: lanza 'cantidad' proyectiles de origen a destino y un efecto de impacto al llegar cada uno
@@ -443,7 +443,7 @@ def construir(nombre, tipo, atacante):
     # ---------- AGUA ----------
     if nombre == "Pistola Agua":
         # Chorro con los fotogramas de la hoja: pistola0..3 en vuelo y pistola4 al impactar.
-        # El sprite apunta hacia arriba-derecha; cuando dispara el rival se gira 180 grados.
+        # La imagen apunta hacia arriba-derecha; cuando dispara el rival se gira 180 grados.
         giro = 0 if atacante == "jugador" else 180
         en_vuelo = tuple(f"pistola{i}" for i in range(4))
         elementos = [Particula(en_vuelo, k * 5, 16, punto_salida, destino, escala=3, frames_por_cuadro=3, angulo=giro) for k in range(3)]

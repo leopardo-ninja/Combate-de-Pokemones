@@ -28,6 +28,44 @@ def calcular_multiplicador(tipo_ataque, tipo_defensor):
     return 1.0
 
 
+# ----------------- AJUSTES DEL DAÑO (se pueden cambiar para equilibrar el juego) -----------------
+FACTOR_DAÑO = 0.30   # Multiplicador general: más alto = combates más cortos
+TOPE_DAÑO = 0.40     # Ningún golpe quita más de este % de la vida máxima del rival (evita one-shots)
+BONO_STAB = 1.5      # Bono si la habilidad es del mismo tipo que el Pokémon que la usa
+
+
+# Calcula el daño de una habilidad. La usan tanto el jugador como la IA, así el cálculo está solo aquí
+# atacante y defensor son los diccionarios de datos del catálogo; habilidad es (nombre, potencia, tipo)
+# Devuelve (daño, multiplicador de tipos)
+def calcular_daño(atacante, defensor, habilidad):
+    nombre_habilidad, potencia, tipo_habilidad = habilidad
+
+    # Las habilidades de Estado no hacen daño
+    if tipo_habilidad == "Estado":
+        return 0, 1.0
+
+    multiplicador = calcular_multiplicador(tipo_habilidad, defensor["tipo"])
+
+    # Las Normales usan ataque/defensa; las elementales usan la mejor estadística ofensiva y defensiva
+    if tipo_habilidad == "Normal":
+        ataque = atacante["ataque"]
+        defensa = defensor["defensa"]
+    else:
+        ataque = max(atacante["ataque"], atacante["atk_esp"])
+        defensa = max(defensor["defensa"], defensor["def_esp"])
+
+    # Bono por usar una habilidad del propio tipo
+    bono = 1.0
+    if tipo_habilidad == atacante["tipo"]:
+        bono = BONO_STAB
+
+    daño = int(potencia * (ataque / defensa) * FACTOR_DAÑO * multiplicador * bono)
+
+    # Tope por golpe: un solo ataque nunca supera el % de vida máxima del rival
+    daño = min(daño, int(defensor["hp"] * TOPE_DAÑO))
+    return daño, multiplicador
+
+
 # ----------------- CLASE DE COMBATE -----------------
 # Guarda todo el estado del combate (equipos, vida, turno y mensajes). No dibuja nada: de eso se encarga la interfaz
 class Combate:
@@ -88,9 +126,8 @@ class Combate:
         if tipo_habilidad == "Estado":
             self.mensaje = f"¡{self.nombre_jugador.capitalize()} usó {nombre_habilidad}!"
         else:
-            multiplicador = calcular_multiplicador(tipo_habilidad, self.datos_ia["tipo"])
-            # Daño = potencia x multiplicador de tipos. La vida nunca baja de 0
-            daño = int(potencia * multiplicador)
+            # El daño depende de la potencia, las estadísticas, el tipo y el tope (ver calcular_daño). La vida nunca baja de 0
+            daño, multiplicador = calcular_daño(self.datos_jugador, self.datos_ia, habilidad)
             self.hp_actual_ia = max(0, self.hp_actual_ia - daño)
 
             # Avisa a la interfaz para que anime el daño (parpadeo, texto flotante y sonido)
@@ -165,8 +202,7 @@ class Combate:
         if tipo_habilidad == "Estado":
             self.mensaje = f"¡El rival usó {nombre_habilidad}!"
         else:
-            multiplicador = calcular_multiplicador(tipo_habilidad, self.datos_jugador["tipo"])
-            daño = int(potencia * multiplicador)
+            daño, multiplicador = calcular_daño(self.datos_ia, self.datos_jugador, habilidad)
             self.hp_actual_jugador = max(0, self.hp_actual_jugador - daño)
 
             self.eventos.append(("daño", "jugador", daño, multiplicador))

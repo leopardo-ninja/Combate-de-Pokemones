@@ -8,7 +8,6 @@ from config import (
     ANCHO_VIRTUAL, ALTO_VIRTUAL, ANCHO_REAL, ALTO_REAL, MODO_VENTANA, AZUL_OSCURO,
 )
 from motor_combate import Combate
-from pokemons import SECCIONES_POKEMON, LISTA_PLANA_POKES
 
 
 # Reproduce el sonido de selección que se usa en todos los menús
@@ -16,11 +15,10 @@ def sonido_seleccion():
     sonido.efecto("interfaz/select_1")     # Sonido al darle al seleccionar
 
 
+# Traduce una tecla del combate a una acción (la misma que produce un clic).
+#
+# Las flechas solo mueven el botón resaltado; ENTER elige el resaltado; ESC vuelve.
 def tecla_a_accion(tecla, escena):
-    """Traduce una tecla del combate a una acción (la misma que produce un clic).
-
-    Las flechas solo mueven el botón resaltado; ENTER elige el resaltado; ESC vuelve.
-    """
     # Flechas: solo mueven el botón resaltado
     if tecla in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
         escena.mover_seleccion(tecla)
@@ -33,8 +31,8 @@ def tecla_a_accion(tecla, escena):
     return None
 
 
+# Ejecuta sobre el motor una acción de combate (venga del teclado o del mouse).
 def aplicar_accion(accion, combate, modo_juego, escena):
-    """Ejecuta sobre el motor una acción de combate (venga del teclado o del mouse)."""
     # No se acepta nada si no es el turno del jugador o si hay una animación en curso
     if combate.turno != "jugador" or escena.ocupado():
         return
@@ -77,7 +75,7 @@ def main():
     pantalla = pygame.Surface((ANCHO_VIRTUAL, ALTO_VIRTUAL))
     pygame.display.set_caption("Combate Proyecto - Pokémon Añil Ultimate Edition (Responsivo)")
 
-    # estado_app decide qué pantalla se muestra: menu_principal, arena, seleccion, estadisticas, combate o biblioteca
+    # estado_app decide qué pantalla se muestra: menu_principal, arena, seleccion, estadisticas, combate o pokedex
     estado_app = "menu_principal"
     modo_juego = "1v1"
     escenario_sel = 0
@@ -88,11 +86,8 @@ def main():
     escena_seleccion = None
     equipo_seleccionado = []
 
-    # Biblioteca: sección (tipo) y Pokémon resaltados, si la ficha está abierta y el scroll
-    lib_seccion_idx = 0
-    lib_pokemon_idx = 0
-    lib_detalle = False
-    scroll_offset_lib = 0
+    # Pokédex: usa la misma cuadrícula que la selección; se crea al entrar desde el menú
+    escena_pokedex = None
 
     # Reloj para limitar el juego a 60 fotogramas por segundo
     reloj = pygame.time.Clock()
@@ -103,11 +98,8 @@ def main():
     escena_combate = None
     retraso_ia = 0
 
-    # Lista de tipos (FUEGO, AGUA...) para recorrer la biblioteca por secciones
-    tipo_claves = list(SECCIONES_POKEMON.keys())
-
     # Botones del menú principal (x, y, ancho, alto, texto), uno debajo del otro
-    textos_menu = ["Modo Arena", "Biblioteca de Pokémon", "Salir"]
+    textos_menu = ["Modo Arena", "Pokédex", "Salir"]
     botones_menu = [ui.Boton(710, 430 + i * 90, 500, 70, texto) for i, texto in enumerate(textos_menu)]
 
     # Bucle principal: cada vuelta procesa los eventos, actualiza y dibuja un frame
@@ -116,6 +108,8 @@ def main():
         pantalla.fill(AZUL_OSCURO)
         # Se pone en True cuando el usuario confirma una opción del menú principal (ENTER o clic)
         activar_opcion = False
+        # Se pone en True al confirmar COMENZAR en la pantalla de estadísticas (ENTER, ESPACIO o clic)
+        comenzar_combate = False
 
         # Revisa todos los eventos pendientes (teclado, mouse, cerrar ventana)
         for evento in pygame.event.get():
@@ -175,6 +169,31 @@ def main():
                 elif evento.button == 3:
                     estado_app = "arena"
 
+            # --- Mouse en las estadísticas del equipo ---
+            elif evento.type == pygame.MOUSEBUTTONDOWN and estado_app == "estadisticas":
+                if evento.button == 1 and ui.clic_comenzar(evento.pos):
+                    comenzar_combate = True
+                # Clic derecho = volver a la selección de equipo (como ESC)
+                elif evento.button == 3:
+                    estado_app = "seleccion"
+
+            # --- Mouse en la pokédex ---
+            elif evento.type == pygame.MOUSEMOTION and estado_app == "pokedex":
+                escena_pokedex.pasar_mouse(evento.pos)
+
+            elif evento.type == pygame.MOUSEWHEEL and estado_app == "pokedex":
+                escena_pokedex.desplazar(evento.y)
+
+            elif evento.type == pygame.MOUSEBUTTONDOWN and estado_app == "pokedex":
+                if evento.button == 1:
+                    # Clic sobre un pokémon: lo resalta y su ficha aparece en el panel
+                    if escena_pokedex.clic(evento.pos) is not None:
+                        sonido_seleccion()
+                # Clic derecho = volver al menú principal (como ESC)
+                elif evento.button == 3:
+                    estado_app = "menu_principal"
+                    seleccion_idx = 0
+
             # --- Mouse en el combate ---
             elif evento.type == pygame.MOUSEMOTION and estado_app == "combate":
                 escena_combate.seleccionar_en(evento.pos)
@@ -227,77 +246,19 @@ def main():
 
                 elif estado_app == "estadisticas":
                     if evento.key == pygame.K_RETURN or evento.key == pygame.K_SPACE:
-                        sonido_seleccion()
-                        # Crea el motor del combate y la escena que lo dibuja
-                        combate = Combate(equipo_seleccionado, modo_juego)
-                        escena_combate = ui.EscenaCombate(combate, escenario_sel)
-                        estado_app = "combate"
+                        comenzar_combate = True
+                    elif evento.key == pygame.K_ESCAPE:
+                        estado_app = "seleccion"
 
                 elif estado_app == "combate":
                     accion_combate = tecla_a_accion(evento.key, escena_combate)
 
-                elif estado_app == "biblioteca":
-                    # Biblioteca: tipo (sección) que se está viendo y sus pokémons
-                    tipo_actual = tipo_claves[lib_seccion_idx]
-                    pokemons_actuales = SECCIONES_POKEMON[tipo_actual]
-
-                    # Con la ficha abierta, ESC o ENTER la cierran
-                    if lib_detalle:
-                        if evento.key == pygame.K_ESCAPE or evento.key == pygame.K_RETURN:
-                            lib_detalle = False
+                elif estado_app == "pokedex":
+                    if evento.key == pygame.K_ESCAPE:
+                        estado_app = "menu_principal"
+                        seleccion_idx = 0
                     else:
-                        # Las tarjetas se muestran en 2 columnas por fila.
-                        # Abajo: baja una fila; si no hay más filas en la sección, pasa a la siguiente
-                        if evento.key == pygame.K_DOWN:
-                            # fila = índice // 2 y columna = índice % 2 (dos tarjetas por fila)
-                            fila = lib_pokemon_idx // 2
-                            if fila < 1:
-                                nuevo_indice = lib_pokemon_idx + 2
-                                if nuevo_indice < len(pokemons_actuales):
-                                    lib_pokemon_idx = nuevo_indice
-                                else:
-                                    lib_pokemon_idx = len(pokemons_actuales) - 1
-                            elif fila == 1:
-                                if len(pokemons_actuales) > 4:
-                                    lib_pokemon_idx = 4
-                                else:
-                                    lib_seccion_idx = (lib_seccion_idx + 1) % len(tipo_claves)
-                                    lib_pokemon_idx = 0
-                            else:
-                                lib_seccion_idx = (lib_seccion_idx + 1) % len(tipo_claves)
-                                lib_pokemon_idx = 0
-
-                        elif evento.key == pygame.K_UP:
-                            fila = lib_pokemon_idx // 2
-                            if fila > 0:
-                                lib_pokemon_idx -= 2
-                            else:
-                                lib_seccion_idx = (lib_seccion_idx - 1) % len(tipo_claves)
-                                pokemons_seccion_anterior = SECCIONES_POKEMON[tipo_claves[lib_seccion_idx]]
-                                lib_pokemon_idx = len(pokemons_seccion_anterior) - 1
-
-                        elif evento.key == pygame.K_RIGHT:
-                            columna = lib_pokemon_idx % 2
-                            if columna == 0 and lib_pokemon_idx + 1 < len(pokemons_actuales):
-                                lib_pokemon_idx += 1
-
-                        elif evento.key == pygame.K_LEFT:
-                            columna = lib_pokemon_idx % 2
-                            if columna == 1:
-                                lib_pokemon_idx -= 1
-
-                        elif evento.key == pygame.K_RETURN:
-                            sonido_seleccion()
-                            lib_detalle = True
-                        elif evento.key == pygame.K_ESCAPE:
-                            estado_app = "menu_principal"
-
-                        # Ajusta el scroll para que la tarjeta resaltada siga visible
-                        y_tarjeta = lib_seccion_idx * 700 + 50 + (lib_pokemon_idx // 2) * 190
-                        if y_tarjeta - scroll_offset_lib > 700:
-                            scroll_offset_lib = y_tarjeta - 700
-                        elif y_tarjeta - scroll_offset_lib < 80:
-                            scroll_offset_lib = max(0, y_tarjeta - 80)
+                        escena_pokedex.mover(evento.key)
 
             # --- Seleccion combate ---
             # Si hubo una acción de combate: MENU vuelve al menú principal; el resto se aplica al motor
@@ -309,17 +270,22 @@ def main():
                 else:
                     aplicar_accion(accion_combate, combate, modo_juego, escena_combate)
 
+        # --- Comenzar combate (desde las estadísticas) ---
+        if comenzar_combate and estado_app == "estadisticas":
+            sonido_seleccion()
+            # Crea el motor del combate y la escena que lo dibuja
+            combate = Combate(equipo_seleccionado, modo_juego)
+            escena_combate = ui.EscenaCombate(combate, escenario_sel)
+            estado_app = "combate"
+
         # --- Seleccion Menu ---
         if activar_opcion and estado_app == "menu_principal":
             sonido_seleccion()
             if seleccion_idx == 0:
                 estado_app = "arena"
             elif seleccion_idx == 1:
-                estado_app = "biblioteca"
-                lib_seccion_idx = 0
-                lib_pokemon_idx = 0
-                lib_detalle = False
-                scroll_offset_lib = 0
+                estado_app = "pokedex"
+                escena_pokedex = ui.EscenaPokedex()
             elif seleccion_idx == 2:
                 ejecutando = False
 
@@ -357,8 +323,8 @@ def main():
                     retraso_ia = 0
             escena_combate.dibujar(pantalla)
 
-        elif estado_app == "biblioteca":
-            ui.dibujar_biblioteca(pantalla, tipo_claves, scroll_offset_lib, lib_detalle, lib_seccion_idx, lib_pokemon_idx)
+        elif estado_app == "pokedex":
+            escena_pokedex.dibujar(pantalla)
 
         # Escalar el juego a la resolucion del monitor
         pantalla_real.blit(pygame.transform.smoothscale(pantalla, (ANCHO_REAL, ALTO_REAL)), (0, 0))
