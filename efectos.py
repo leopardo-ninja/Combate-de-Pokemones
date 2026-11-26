@@ -8,6 +8,8 @@
 #   gestor.lanzar("jugador", "Lanzallamas", "Fuego", al_impactar=funcion)
 #   cada frame: gestor.actualizar(); gestor.dibujar_fondo(...); gestor.dibujar(...)
 
+# ===== TEMA: Modularidad (Clase 10) =====
+# Se importan math, os, random y pygame
 import math
 import os
 import random
@@ -16,17 +18,23 @@ import pygame
 
 RUTA_EFECTOS = "assets/efectos"
 
+# ===== TEMA: Diccionarios (Clase 11) + Tuplas (Clase 11) =====
+# Diccionarios con clave 'ia'/'jugador' y tuplas (x, y) como valores
 # Centro de cada Pokémon en la pantalla virtual 1920x1080
 CENTRO = {"ia": (1280, 410), "jugador": (640, 690)}
 # Punto de la cara (de donde salen los chorros y adonde llegan)
 CARA = {"ia": (1250, 360), "jugador": (700, 590)}
 
+# ===== TEMA: Diccionarios (Clase 11) =====
+# Diccionarios que guardan imágenes ya cargadas, escaladas y teñidas
 # Cachés para no cargar ni escalar las mismas imágenes en cada frame: originales, escaladas y teñidas
 _CACHE = {}
 _CACHE_ESCALADAS = {}
 _CACHE_TINTADAS = {}
 
 
+# ===== TEMA: Funciones (Clase 7) + Diccionarios (Clase 11) =====
+# La tupla (grupo, nombre) es la clave de la caché; retorna la imagen o None
 # Carga assets/efectos/<grupo>/<nombre>.png (o None si no existe) y la guarda en caché
 def _cargar(grupo, nombre):
     clave = (grupo, nombre)
@@ -36,11 +44,15 @@ def _cargar(grupo, nombre):
     return _CACHE[clave]
 
 
+# ===== TEMA: Funciones (Clase 7) + Modularidad (Clase 10) =====
+# Una función que reutiliza a otra (_cargar)
 # Carga la imagen de un ataque: n puede ser un número (a001, a002...) o el nombre de un archivo
 def cargar_pokemon_ataque(n):
     return _cargar("ataque", n if isinstance(n, str) else f"a{n:03d}")
 
 
+# ===== TEMA: Funciones (Clase 7) =====
+# Usa max() e int(); guarda el resultado en el diccionario de caché
 # Agranda la imagen por un factor (sin suavizar, es pixel art) y recuerda el resultado
 def _escalar_con_cache(superficie, factor):
     clave = (id(superficie), round(factor, 2))
@@ -50,6 +62,8 @@ def _escalar_con_cache(superficie, factor):
     return _CACHE_ESCALADAS[clave]
 
 
+# ===== TEMA: Funciones (Clase 7) + Tuplas (Clase 11) =====
+# tuple(...) crea una tupla nueva con los colores aclarados
 def _tintar(img, tinte):
     """Devuelve una copia de img con sus colores multiplicados por 'tinte' (r, g, b). Se guarda en caché."""
     clave = (id(img), tinte)
@@ -62,16 +76,22 @@ def _tintar(img, tinte):
     return _CACHE_TINTADAS[clave]
 
 
+# ===== TEMA: Funciones (Clase 7) + Expresiones y operadores (Clase 3) =====
+# Fórmula aritmética pura: retorna un valor entre inicio y fin
 # Interpolación lineal: con fraccion=0 devuelve inicio, con fraccion=1 devuelve fin y en medio, un punto intermedio
 def _lerp(inicio, fin, fraccion):
     return inicio + (fin - inicio) * fraccion
 
 
+# ===== TEMA: Funciones (Clase 7) + Condicionales (Clase 4) =====
+# Expresión condicional en una línea que retorna 'ia' o 'jugador'
 # Devuelve el otro bando: "ia" <-> "jugador"
 def _oponente(lado):
     return "ia" if lado == "jugador" else "jugador"
 
 
+# ===== TEMA: POO (Clase 16) =====
+# Cada efecto visual es una clase con constructor (__init__) y método dibujar; todas comparten la misma interfaz
 # ----------------- ELEMENTOS ANIMADOS -----------------
 # Elemento animado básico: una imagen (o varios fotogramas) que se mueve, crece, rota y se desvanece
 class Particula:
@@ -94,6 +114,8 @@ class Particula:
         if not self.frames or frame_actual < self.frame_inicio or frame_actual >= self.frame_fin:
             return
         frames_transcurridos = frame_actual - self.frame_inicio
+        # ===== TEMA: Expresiones y operadores (Clase 3) + Condicionales (Clase 4) =====
+        # Operadores aritméticos y expresión condicional en una línea (ida_vuelta)
         # progreso va de 0 (al empezar) a 1 (al terminar); con ida_vuelta sube hasta 1 y vuelve a 0
         progreso = frames_transcurridos / self.duracion
         progreso_ajustado = 1 - abs(2 * progreso - 1) if self.ida_vuelta else progreso
@@ -123,6 +145,8 @@ class Particula:
         pantalla.blit(img, img.get_rect(center=(int(x), int(y))), special_flags=modo_mezcla)
 
 
+# ===== TEMA: POO (Clase 16) =====
+# Clase Chorro: atributos en __init__ y método dibujar
 class Chorro:
     """Chorro fijo: sale de 'desde', se estira hasta 'hasta' y solo cambia de fotograma.
     La imagen es vertical con la cresta arriba; la cresta queda en el extremo del rival."""
@@ -154,6 +178,8 @@ class Chorro:
         pantalla.blit(img, img.get_rect(center=(int(centro[0]), int(centro[1]))))
 
 
+# ===== TEMA: POO (Clase 16) =====
+# Clase Anillo: atributos en __init__ y método dibujar
 class Anillo:
     """Círculo que se expande (ondas, pulsos)."""
 
@@ -174,6 +200,8 @@ class Anillo:
         pantalla.blit(superficie, superficie.get_rect(center=self.centro))
 
 
+# ===== TEMA: POO (Clase 16) =====
+# Clase Tajo: atributos en __init__ y método dibujar
 class Tajo:
     """Tres arañazos diagonales (Arañazo, Mordisco...)."""
 
@@ -187,6 +215,8 @@ class Tajo:
         progreso = (frame_actual - self.frame_inicio) / self.duracion
         # Los arañazos se trazan en el primer 40% de la animación y luego solo se adelgazan
         crecer = min(1.0, progreso * 2.5)
+        # ===== TEMA: Bucles (Clase 4) =====
+        # for/range dibuja los 3 arañazos
         for i in range(3):
             desfase_x = (i - 1) * 46
             x0, y0 = self.centro[0] + desfase_x - self.largo // 3, self.centro[1] - self.largo // 2 + i * 8
@@ -196,6 +226,8 @@ class Tajo:
             pygame.draw.line(pantalla, self.color, (x0, y0), (x1, y1), ancho)
 
 
+# ===== TEMA: POO (Clase 16) =====
+# Clase Haz: atributos en __init__ y método dibujar
 class Haz:
     """Rayo continuo entre dos puntos (Rayo Solar, Electrocañón...)."""
 
@@ -217,6 +249,8 @@ class Haz:
         pygame.draw.line(pantalla, (255, 255, 255), self.desde, punta, max(2, grosor_actual // 2))
 
 
+# ===== TEMA: POO (Clase 16) =====
+# Clase Ola: atributos en __init__ y método dibujar
 class Ola:
     """Ola de agua que cruza la pantalla (Surf)."""
 
@@ -239,6 +273,8 @@ class Ola:
         alto_ola = self.y1 - self.y0
         # Polígono azul cuyo borde derecho ondula con un seno; encima van círculos blancos de espuma
         puntos = [(0, 0)]
+        # ===== TEMA: Bucles (Clase 4) + Listas (Clase 11) =====
+        # range con paso 20; append agrega puntos (tuplas) a la lista del polígono
         for y_ola in range(0, alto_ola + 1, 20):
             puntos.append((frente + int(40 * math.sin(y_ola / 28 + frame_actual / 4)), y_ola))
         puntos.append((0, alto_ola))
@@ -249,6 +285,8 @@ class Ola:
         pantalla.blit(superficie, (0, self.y0))
 
 
+# ===== TEMA: POO (Clase 16) =====
+# Clase Flash: atributos en __init__ y método dibujar
 class Flash:
     """Destello de pantalla completa."""
 
@@ -269,6 +307,8 @@ class Flash:
         pantalla.blit(self._superficie, (0, 0))
 
 
+# ===== TEMA: POO (Clase 16) =====
+# Clase Orbita: atributos en __init__ y método dibujar
 class Orbita:
     """Imágenes girando alrededor de un punto (Giro Fuego). Si se da centro_final, el anillo viaja
     desde 'centro' hasta 'centro_final' mientras gira (Llamarada)."""
@@ -285,6 +325,8 @@ class Orbita:
             return
         progreso = (frame_actual - self.frame_inicio) / self.duracion
         radio = _lerp(self.radio_inicial, self.radio_final, progreso)
+        # ===== TEMA: Bucles (Clase 4) =====
+        # for/range coloca cada imagen en su ángulo
         for i in range(self.cantidad):
             # Cada imagen ocupa un ángulo propio y todas giran 'vueltas' veces. El 0.7 aplasta el círculo para dar perspectiva
             angulo = 2 * math.pi * (i / self.cantidad + self.vueltas * progreso)
@@ -295,6 +337,8 @@ class Orbita:
             pantalla.blit(img, img.get_rect(center=(int(pos[0]), int(pos[1]))))
 
 
+# ===== TEMA: POO (Clase 16) =====
+# Clase RayoDescendente: atributos en __init__ y método dibujar
 class RayoDescendente:
     # Rayo que se dibuja de arriba hacia abajo, se mantiene y se borra de arriba hacia abajo
 
@@ -327,20 +371,28 @@ class RayoDescendente:
         pantalla.blit(img, (x, y + fila_desde), area=pygame.Rect(0, fila_desde, ancho, fila_hasta - fila_desde))
 
 
+# ===== TEMA: Funciones (Clase 7) + Diccionarios (Clase 11) =====
+# Las funciones constructoras retornan un diccionario que describe el ataque
 # Funciones que arman los elementos de cada ataque. Devuelven un diccionario con:
 # elementos (lo que se dibuja), impacto (frame del golpe, donde se aplica el daño) y opciones (sacude, embestida, tile...)
 # ----------------- CONSTRUCTORES DE EFECTOS -----------------
+# ===== TEMA: Funciones (Clase 7) =====
+# Parámetros con valor por defecto; retorna un objeto Particula
 # Destello de impacto fijo sobre destino que crece y se desvanece (spread lo mueve un poco al azar)
 def _impacto(destino, ids_pokemons, frame_inicio, escala=6, escala_fin=None, duracion=16, spread=0):
     pos = (destino[0] + random.randint(-spread, spread), destino[1] + random.randint(-spread, spread))
     return Particula(ids_pokemons, frame_inicio, duracion, pos, pos, escala=escala, escala_fin=escala_fin or escala * 1.4, frames_por_cuadro=4, alpha_fin=0)
 
 
+# ===== TEMA: Funciones (Clase 7) + Listas (Clase 11) =====
+# Muchos parámetros con valor por defecto; la lista elementos crece con append y +=
 # Ataque a distancia: lanza 'cantidad' proyectiles de origen a destino y un efecto de impacto al llegar cada uno
 def proyectil(origen, destino, ids_proyectil, cantidad=1, escala=5, duracion=24, separacion_frames=4, altura_arco=0, frames_por_cuadro=4, ids_impacto=(233,), escala_impacto=6,
               spread=0, aditivo=False, giro_por_frame=0, ida_vuelta=False, sacude=0, extra=None):
     elementos = []
     # Cada proyectil sale separacion_frames después del anterior y cae en un punto algo disperso
+    # ===== TEMA: Bucles (Clase 4) =====
+    # for/range crea un proyectil por cada repetición
     for k in range(cantidad):
         variacion = random.randint(-spread, spread) if spread else 0
         hasta = (destino[0] + variacion, destino[1] + variacion // 2)
@@ -353,6 +405,8 @@ def proyectil(origen, destino, ids_proyectil, cantidad=1, escala=5, duracion=24,
     return {"elementos": elementos, "impacto": duracion // 2 if ida_vuelta else duracion, "sacude": sacude}
 
 
+# ===== TEMA: Funciones (Clase 7) =====
+# Retorna un diccionario con los elementos y las opciones del ataque
 # Ataque cuerpo a cuerpo: el atacante embiste y el golpe aparece sobre el rival en frame_impacto
 def contacto(origen, destino, golpe, escala=7, embestida=True, sacude=8, extra=None, frame_impacto=12):
     elementos = [_impacto(destino, golpe, frame_impacto, escala=escala, duracion=16)]
@@ -360,11 +414,15 @@ def contacto(origen, destino, golpe, escala=7, embestida=True, sacude=8, extra=N
     return {"elementos": elementos, "impacto": frame_impacto, "embestida": embestida, "sacude": sacude}
 
 
+# ===== TEMA: Funciones (Clase 7) =====
+# Retorna un diccionario con la baldosa de estadística
 # Habilidad de Estado: no hace daño, muestra una baldosa de estadística (sube o baja) sobre un Pokémon
 def estado(sobre, tile, sube, extra=None, duracion=70):
     return {"elementos": extra or [], "impacto": 10, "tile": (sobre, tile, sube, duracion)}
 
 
+# ===== TEMA: Condicionales (Clase 4) + Modularidad (Clase 10) =====
+# construir() es una cadena de if según el nombre de la habilidad; reutiliza proyectil, contacto y estado
 # ----------------- Recrear cada habilidad -----------------
 # Recibe el nombre y tipo de la habilidad y quién la usa, y devuelve el efecto correspondiente.
 # Está ordenada por tipo y al final hay un efecto genérico de respaldo
@@ -376,10 +434,14 @@ def construir(nombre, tipo, atacante):
     direccion_x = 1 if destino[0] > origen[0] else -1
     punto_salida = (origen[0] + direccion_x * 120, origen[1] - 20)          # salida del proyectil (de cara al rival)
 
+    # ===== TEMA: Funciones (Clase 7) =====
+    # Función definida dentro de otra función
     # Atajo para crear la baldosa de una habilidad de Estado
     def tile(sobre, nombre_tile, sube, extra=None):
         return estado(sobre, nombre_tile, sube, extra)
 
+    # ===== TEMA: Condicionales (Clase 4) + Tuplas (Clase 11) =====
+    # if nombre in (...): operador in sobre tuplas; return anticipado
     # ---------- NORMAL ----------
     # Ataques de contacto: el atacante embiste y el rival se sacude
     if nombre in ("Placaje", "Tacleada", "Constricción"):
@@ -487,6 +549,8 @@ def construir(nombre, tipo, atacante):
                        Flash(30, 20, (255, 250, 170), 130),
                        Haz(punto_salida, destino, 30, 34, (255, 240, 120), 70), _impacto(destino, (233,), 36, escala=8)],
                 "impacto": 32, "sacude": 12}
+    # ===== TEMA: Diccionarios (Clase 11) + Listas (Clase 11) =====
+    # Diccionario usado como tabla de búsqueda; lista por comprensión con random
     # Energía que sale del rival hacia el atacante; más partículas cuanto más fuerte es el ataque
     if nombre in ("Absorber", "Megaagotar", "Gigadrenado"):
         cantidad = {"Absorber": 6, "Megaagotar": 9, "Gigadrenado": 12}[nombre]
@@ -541,6 +605,8 @@ def construir(nombre, tipo, atacante):
         if nombre == "Bofetón Lodo":
             resultado["elementos"].append(Particula((192,), 6, 14, (destino[0] - 90, destino[1]), (destino[0] + 90, destino[1]), escala=7))
         return resultado
+    # ===== TEMA: Bucles (Clase 4) + Listas (Clase 11) =====
+    # for/range con append sobre la lista elementos
     # Rocas que saltan por el campo y sacuden a ambos Pokémon (más fuerte con Terremoto)
     if nombre in ("Terremoto", "Terratemblor"):
         fuerte = nombre == "Terremoto"
@@ -556,6 +622,8 @@ def construir(nombre, tipo, atacante):
     if nombre == "Huesomerang":
         return proyectil(punto_salida, destino, (80,), cantidad = 1, escala = 6, duracion = 44, giro_por_frame = 34, ida_vuelta = True, ids_impacto = (233,), sacude = 10, altura_arco = 60)
 
+    # ===== TEMA: Condicionales (Clase 4) =====
+    # if anidados: cada habilidad de Estado sube o baja una estadística
     # ---------- ESTADO (baldosas de estadísticas) ----------
     # Habilidades de Estado: cada una sube una estadística propia (baldosa hacia arriba) o baja una del rival (hacia abajo)
     if tipo == "Estado":
@@ -592,6 +660,8 @@ def construir(nombre, tipo, atacante):
                     "impacto": 10}
         return tile(atacante, "mezcla", True)
 
+    # ===== TEMA: Diccionarios (Clase 11) + Tuplas (Clase 11) =====
+    # .get() con valor por defecto y desempaquetado de tupla
     # ---------- RESPALDO POR TIPO ----------
     # Si la habilidad no tiene efecto propio se usa uno genérico según su tipo
     respaldo = {"Fuego": ((38, 39, 40), (43,)), "Agua": ((3, 2, 1), (7,)), "Planta": ((136, 137), (234,)),
@@ -600,12 +670,16 @@ def construir(nombre, tipo, atacante):
     return proyectil(punto_salida, destino, ids_proyectil, cantidad=3, escala=5, duracion=22, separacion_frames=5, spread=20, ids_impacto=ids_impacto)
 
 
+# ===== TEMA: POO (Clase 16) =====
+# Clase _Efecto: guarda el estado de la animación en curso
 # --------- Gestor ---------
 # Estado de la animación en curso: sus elementos, el frame actual y las opciones (sacudida, embestida, baldosa...)
 class _Efecto:
     def __init__(self, atacante, spec, al_impactar):
         self.atacante = atacante
         self.elementos = spec["elementos"]
+        # ===== TEMA: Diccionarios (Clase 11) =====
+        # .get(clave, valor_por_defecto) lee las opciones del diccionario spec
         # Frame en el que ocurre el golpe: ahí se aplica el daño
         self.impacto = spec.get("impacto", 10)
         self.embestida = spec.get("embestida", False)
@@ -617,6 +691,8 @@ class _Efecto:
         self.tile = spec.get("tile")
         self.al_impactar = al_impactar
         self.frame_actual = 0
+        # ===== TEMA: Listas (Clase 11) =====
+        # Lista por comprensión + concatenación; max() devuelve el mayor
         # La animación termina cuando acaba el último elemento (o 14 frames después del impacto)
         frame_fin = max([elemento.frame_fin for elemento in self.elementos] + [self.impacto + 14])
         if self.tile:
@@ -625,6 +701,8 @@ class _Efecto:
         self.impacto_notificado = False
 
 
+# ===== TEMA: POO (Clase 16) =====
+# Clase GestorEfectos: controla qué efecto se reproduce y lo avanza frame a frame
 # Controla qué efecto se reproduce, lo avanza frame a frame y calcula los desplazamientos de los pokémons
 class GestorEfectos:
     def __init__(self):
@@ -633,14 +711,20 @@ class GestorEfectos:
         self._mascaras = {}
 
     # --------- Control ---------
+    # ===== TEMA: POO (Clase 16) =====
+    # Método que retorna un booleano
     # True mientras hay una animación (la interfaz bloquea los botones)
     def ocupado(self):
         return self.actual is not None
 
+    # ===== TEMA: POO (Clase 16) + Modularidad (Clase 10) =====
+    # Llama a construir() y guarda el objeto en self.actual
     # Construye y empieza el efecto de una habilidad; al_impactar se llama cuando ocurre el golpe
     def lanzar(self, atacante, nombre, tipo, al_impactar=None):
         self.actual = _Efecto(atacante, construir(nombre, tipo, atacante), al_impactar)
 
+    # ===== TEMA: Condicionales (Clase 4) =====
+    # if anidados; return anticipado si no hay efecto
     # Se llama una vez por frame: avanza la animación y avisa del impacto
     def actualizar(self):
         efecto = self.actual
@@ -659,6 +743,8 @@ class GestorEfectos:
             # actual: el efecto en curso (None si no hay animación)
             self.actual = None
 
+    # ===== TEMA: Condicionales (Clase 4) + Tuplas (Clase 11) =====
+    # Varios if seguidos; retorna una tupla (dx, dy)
     # --------- Desplazamientos de los Pokemons ---------
     # Devuelve cuánto (dx, dy) hay que mover a un Pokémon en este frame por embestida, vaivén, sacudida o temblor
     def desplazamiento(self, quien):
@@ -689,6 +775,8 @@ class GestorEfectos:
             dx += math.sin(efecto.frame_actual * 1.7) * 14
         return (int(dx), int(dy))
 
+    # ===== TEMA: Diccionarios (Clase 11) + Tuplas (Clase 11) =====
+    # pokemons es un diccionario {lado: (imagen, posición)}
     # --------- dibujo ---------
     def dibujar_sobre_pokemons(self, pantalla, pokemons):
         """Baldosas de estadísticas sobre la silueta del Pokémon. pokemons = {"ia": (imagen, pos), ...}"""
@@ -711,6 +799,8 @@ class GestorEfectos:
         capa = pygame.Surface((ancho, alto), pygame.SRCALPHA)
         paso = base.get_height()
         desplazamiento_y = (-frames_transcurridos * 7 if sube else frames_transcurridos * 7) % paso
+        # ===== TEMA: Bucles (Clase 4) =====
+        # range con tres argumentos (inicio, fin, paso)
         for y_baldosa in range(-paso, alto + paso, paso):
             capa.blit(base, (0, y_baldosa + desplazamiento_y))
         # Se recorta con la silueta del Pokémon: la baldosa solo se ve sobre su cuerpo
@@ -718,6 +808,8 @@ class GestorEfectos:
         capa.set_alpha(alfa)
         pantalla.blit(capa, pos)
 
+    # ===== TEMA: Bucles (Clase 4) + POO (Clase 16) =====
+    # for sobre una lista de objetos; cada uno ejecuta su propio dibujar
     # Dibuja todos los elementos del efecto en curso en su frame actual
     def dibujar(self, pantalla):
         efecto = self.actual
@@ -726,6 +818,8 @@ class GestorEfectos:
         for elemento in efecto.elementos:
             elemento.dibujar(pantalla, efecto.frame_actual)
 
+    # ===== TEMA: POO (Clase 16) + Diccionarios (Clase 11) =====
+    # Métodos privados con caché en diccionario
     # --- utilidades ---
     # Devuelve la baldosa de estadística como cuadrado del ancho pedido (si falta la imagen usa un cuadro blanco)
     def _tile(self, nombre, ancho):

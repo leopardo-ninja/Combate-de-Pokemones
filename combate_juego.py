@@ -1,3 +1,5 @@
+# ===== TEMA: Modularidad (Clase 10) =====
+# Se importan módulos de Python (random, sys, pygame) y propios (ui, sonido, config, motor_combate)
 import random
 import sys
 import pygame
@@ -10,11 +12,15 @@ from config import (
 from motor_combate import Combate
 
 
+# ===== TEMA: Funciones (Clase 7) =====
+# Sin parámetros ni retorno (void): solo produce un efecto (sonido)
 # Reproduce el sonido de selección que se usa en todos los menús
 def sonido_seleccion():
     sonido.efecto("interfaz/select_1")     # Sonido al darle al seleccionar
 
 
+# ===== TEMA: Funciones (Clase 7) + Condicionales (Clase 4) =====
+# if/elif sobre la tecla; 'in' con una tupla; retorna una acción o None
 # Traduce una tecla del combate a una acción (la misma que produce un clic).
 # Las flechas solo mueven el botón resaltado; ENTER elige el resaltado; ESC vuelve.
 def tecla_a_accion(tecla, escena):
@@ -30,8 +36,12 @@ def tecla_a_accion(tecla, escena):
     return None
 
 
+# ===== TEMA: Funciones (Clase 7) + Condicionales (Clase 4) =====
+# Cadena if/elif según la acción recibida
 # Ejecuta sobre el motor una acción de combate (venga del teclado o del mouse).
 def aplicar_accion(accion, combate, modo_juego, escena):
+    # ===== TEMA: Algoritmos: pre y post condiciones (Clase 2) =====
+    # Pre-condición: si no se cumple, la función termina sin hacer nada
     # No se acepta nada si no es el turno del jugador o si hay una animación en curso
     if combate.turno != "jugador" or escena.ocupado():
         return
@@ -50,11 +60,22 @@ def aplicar_accion(accion, combate, modo_juego, escena):
     # VOLVER: regresa al menú principal del combate
     elif accion == "volver":
         combate.sub_menu = "principal"
+    # ===== TEMA: Tuplas (Clase 11) =====
+    # tipo, idx = accion desempaqueta la tupla
     # Las acciones con dato llegan como tupla: ("habilidad", indice) o ("pokemon", indice)
     elif isinstance(accion, tuple):
         tipo, idx = accion
         if tipo == "habilidad":
-            habilidad = combate.datos_jugador["habilidades"][idx]
+            # ===== TEMA: Condicionales (Clase 4) + Algoritmos: pre y post condiciones (Clase 2) =====
+            # Si la habilidad no está disponible (el motor retorna None) no se anima nada: se avisa y se vuelve al menú principal
+            habilidad = combate.habilidad_para_jugador(idx)
+            if habilidad is None:
+                # El motor explica el motivo: sin PP, energía insuficiente (habilidad fuerte) o escudo ya activo
+                combate.mensaje = combate.mensaje_no_disponible(idx)
+                combate.sub_menu = "principal"
+                return
+            # ===== TEMA: Funciones (Clase 7) =====
+            # lambda: se pasa una función como argumento para ejecutarla al impactar
             # Se anima la habilidad y el motor aplica el daño justo al impactar
             escena.lanzar_habilidad("jugador", habilidad, lambda: combate.ejecutar_turno(idx),
                                     f"¡{combate.nombre_jugador.capitalize()} usó {habilidad[0]}!")
@@ -63,7 +84,11 @@ def aplicar_accion(accion, combate, modo_juego, escena):
             combate.cambiar_pokemon_jugador(idx)
 
 
+# ===== TEMA: Funciones (Clase 7) + Modularidad (Clase 10) =====
+# main() agrupa todo el programa; se invoca al final del archivo
 def main():
+    # ===== TEMA: Condicionales (Clase 4) + Pygame (fuera de temario) =====
+    # if/else según MODO_VENTANA; creación de la ventana
     # Crea la ventana real: de tamaño fijo en modo ventana o a pantalla completa si no
     if MODO_VENTANA:
         pantalla_real = pygame.display.set_mode((ANCHO_REAL, ALTO_REAL))
@@ -74,6 +99,8 @@ def main():
     pantalla = pygame.Surface((ANCHO_VIRTUAL, ALTO_VIRTUAL))
     pygame.display.set_caption("Combate Proyecto - Pokémon Añil Ultimate Edition (Responsivo)")
 
+    # ===== TEMA: Expresiones y operadores (Clase 3) =====
+    # Variables de estado: cadenas, números y booleanos
     # estado_app decide qué pantalla se muestra: menu_principal, arena, seleccion, estadisticas, combate o pokedex
     estado_app = "menu_principal"
     modo_juego = "1v1"
@@ -100,6 +127,8 @@ def main():
     # Botones del menú principal (se definen en ui/menu.py)
     botones_menu = ui.crear_botones_menu()
 
+    # ===== TEMA: Bucles (Clase 4) =====
+    # while ejecutando: se repite hasta que sea False
     # Bucle principal: cada vuelta procesa los eventos, actualiza y dibuja un frame
     while ejecutando:
         # Limpia el frame anterior
@@ -109,6 +138,8 @@ def main():
         # Se pone en True al confirmar COMENZAR en la pantalla de estadísticas (ENTER, ESPACIO o clic)
         comenzar_combate = False
 
+        # ===== TEMA: Bucles (Clase 4) + Condicionales (Clase 4) =====
+        # for recorre los eventos; if/elif encadenados según el tipo de evento y la pantalla
         # Revisa todos los eventos pendientes (teclado, mouse, cerrar ventana)
         for evento in pygame.event.get():
             # accion_combate guarda lo que el usuario pidió en el combate (por mouse o teclado)
@@ -116,6 +147,8 @@ def main():
             if evento.type == pygame.QUIT:
                 ejecutando = False
 
+            # ===== TEMA: Bucles (Clase 4) =====
+            # for + enumerate recorre la lista de botones
             # --- Mouse en el menú principal ---
             elif evento.type == pygame.MOUSEMOTION and estado_app == "menu_principal":
                 for i, boton in enumerate(botones_menu):
@@ -204,6 +237,8 @@ def main():
                     accion_combate = "volver"
 
             # --- Teclado ---
+            # ===== TEMA: Condicionales (Clase 4) + Expresiones y operadores (Clase 3) =====
+            # if/elif anidados por pantalla; % (módulo) hace circular la selección
             # Teclado: cada pantalla interpreta las teclas a su manera
             elif evento.type == pygame.KEYDOWN:
                 if estado_app == "menu_principal":
@@ -270,6 +305,8 @@ def main():
                 else:
                     aplicar_accion(accion_combate, combate, modo_juego, escena_combate)
 
+        # ===== TEMA: POO (Clase 16) =====
+        # Se crean objetos: Combate (motor) y EscenaCombate (dibujo)
         # --- Comenzar combate (desde las estadísticas) ---
         if comenzar_combate and estado_app == "estadisticas":
             sonido_seleccion()
@@ -278,6 +315,8 @@ def main():
             escena_combate = ui.EscenaCombate(combate, escenario_sel)
             estado_app = "combate"
 
+        # ===== TEMA: Condicionales (Clase 4) =====
+        # if/elif según el botón elegido
         # --- Seleccion Menu ---
         if activar_opcion and estado_app == "menu_principal":
             sonido_seleccion()
@@ -289,6 +328,8 @@ def main():
             elif seleccion_idx == 2:
                 ejecutando = False
 
+        # ===== TEMA: Condicionales (Clase 4) + Modularidad (Clase 10) =====
+        # if/elif elige qué pantalla dibujar llamando a funciones y objetos del paquete ui
         # ================= RENDERIZADO VISUAL RESPONSIVO =================
         if estado_app != "combate":     # Detiene el sonido de vida baja si el combate acaba
             sonido.parar_loop("efectos/health_low_loop")
@@ -312,11 +353,15 @@ def main():
             ui.dibujar_estadisticas(pantalla, equipo_seleccionado)
 
         elif estado_app == "combate":
+            # ===== TEMA: Condicionales (Clase 4) + Listas (Clase 11) =====
+            # Contador de frames; random.choice sobre la lista de habilidades (tuplas)
             # Turno del rival: espera 60 frames (1 segundo) y lanza una habilidad al azar con su animación
             if combate.turno == "ia" and not escena_combate.ocupado():
                 retraso_ia += 1
                 if retraso_ia > 60:
-                    habilidad_ia = random.choice(combate.datos_ia["habilidades"])
+                    # ===== TEMA: Funciones (Clase 7) + Listas (Clase 11) =====
+                    # El motor elige al azar solo entre las habilidades con PP (antes se elegía de toda la lista con random.choice)
+                    habilidad_ia = combate.elegir_habilidad_ia()
                     escena_combate.lanzar_habilidad(
                         "ia", habilidad_ia, lambda elegida=habilidad_ia: combate.turno_ia(elegida),
                         f"¡{combate.nombre_ia.capitalize()} rival usó {habilidad_ia[0]}!")
@@ -326,6 +371,8 @@ def main():
         elif estado_app == "pokedex":
             escena_pokedex.dibujar(pantalla)
 
+        # ===== TEMA: Pygame (fuera de temario) =====
+        # Escala la superficie virtual a la pantalla real
         # Escalar el juego a la resolucion del monitor
         pantalla_real.blit(pygame.transform.smoothscale(pantalla, (ANCHO_REAL, ALTO_REAL)), (0, 0))
         pygame.display.flip()
@@ -337,6 +384,8 @@ def main():
     sys.exit()
 
 
+# ===== TEMA: Modularidad (Clase 10) =====
+# __name__ == '__main__' ejecuta main() solo si el archivo se corre directamente, no al importarlo
 # Solo arranca el juego si se ejecuta este archivo directamente
 if __name__ == "__main__":
     main()
