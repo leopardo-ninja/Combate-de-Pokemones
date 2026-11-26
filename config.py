@@ -59,7 +59,7 @@ COLORES_TIPO = {
 # Carga de las fuentes del juego
 # Fuentes Escaladas
 # Misma fuente pixelada en 4 tamaños: normal, chica, grande y la usada en los nombres de habilidades
-RUTA_FUENTE = "assets/fuentes/PixelifySans-Bold.ttf"
+RUTA_FUENTE = "assets/fuentes/PixelifySans-Regular.ttf"
 FUENTE = pygame.font.Font(RUTA_FUENTE, 26)
 FUENTE_CHICA = pygame.font.Font(RUTA_FUENTE, 20)
 FUENTE_GRANDE = pygame.font.Font(RUTA_FUENTE, 38)

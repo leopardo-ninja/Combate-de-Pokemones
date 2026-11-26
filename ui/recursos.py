@@ -98,9 +98,17 @@ def obtener_base(lado, indice, escala):
 
 def obtener_caja(lado):
     #Carga la caja de vida ("rival" o "jugador") ya escalada
+    # Si existe caja_<lado>_hd.png se usa esa (más nítida); si no, la imagen normal.
+    # Ambas se escalan al mismo tamaño en pantalla, así las coordenadas de las barras no cambian.
     if lado not in _CACHE_CAJAS:
         ruta = f"assets/ui/caja_{lado}.png"
-        if os.path.exists(ruta):
+        ruta_hd = f"assets/ui/caja_{lado}_hd.png"
+        if os.path.exists(ruta_hd) and os.path.exists(ruta):
+            ancho_logico, alto_logico = pygame.image.load(ruta).get_size()     # tamaño de la imagen normal
+            img = pygame.image.load(ruta_hd).convert_alpha()
+            tam = (int(ancho_logico * ESCALA_CAJA), int(alto_logico * ESCALA_CAJA))
+            _CACHE_CAJAS[lado] = pygame.transform.smoothscale(img, tam)
+        elif os.path.exists(ruta):
             img = pygame.image.load(ruta).convert_alpha()
             _CACHE_CAJAS[lado] = pygame.transform.smoothscale(img, (int(img.get_width() * ESCALA_CAJA), int(img.get_height() * ESCALA_CAJA)))
         else:

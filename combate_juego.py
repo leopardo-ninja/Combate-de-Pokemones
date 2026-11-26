@@ -167,9 +167,12 @@ def main():
 
             elif evento.type == pygame.MOUSEBUTTONDOWN and estado_app == "arena":
                 if evento.button == 1:
-                    # Clic sobre un escenario: se guardan formato y escenario y se pasa a elegir equipo
-                    if escena_arena.clic(evento.pos) == "continuar":
+                    # Clic sobre un formato (1v1 / 3v3) o un escenario: suena la selección
+                    resultado = escena_arena.clic(evento.pos)
+                    if resultado is not None:
                         sonido_seleccion()
+                    # Clic sobre un escenario: se guardan formato y escenario y se pasa a elegir equipo
+                    if resultado == "continuar":
                         modo_juego = escena_arena.modo
                         escenario_sel = escena_arena.escenario
                         estado_app = "seleccion"

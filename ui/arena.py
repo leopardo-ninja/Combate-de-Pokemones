@@ -84,7 +84,7 @@ class EscenaArena:
                 self.escenario = i
                 return
 
-    # Clic sobre un formato lo elige; sobre un escenario lo elige y devuelve "continuar"
+    # Clic sobre un formato lo elige y devuelve "formato"; sobre un escenario lo elige y devuelve "continuar"
     def clic(self, pos_real):
         pos = pos_virtual(pos_real)
         for i, rect_boton in enumerate(RECT_FORMATOS):
@@ -92,7 +92,7 @@ class EscenaArena:
                 self.foco = "formato"
                 self.formato_foco = i
                 self.formato = i
-                return None
+                return "formato"
         for i in range(len(ESCENARIOS)):
             if rect_celda_arena(i).collidepoint(pos):
                 self.foco = "grid"

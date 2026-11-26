@@ -7,6 +7,7 @@ from config import (
     BLANCO, NEGRO, GRIS_CLARO, GRIS_OSCURO, AZUL_BOTON, ROJO_BOTON, VERDE_BOTON, FUENTE, FUENTE_CHICA, FUENTE_GRANDE, FUENTE_HABILIDAD, RUTA_FUENTE
 )
 from pokemons import CATALOGO_POKEMONS
+from motor_combate import ENERGIA_MAX, COSTO_FUERTE
 from .utilidades import pos_virtual, dibujar_resalte, separar_texto_en_lineas
 from .recursos import (
     obtener_pokemon, obtener_caja, obtener_fondo_escenario, dibujar_bases, obtener_barra_mensaje,
@@ -28,8 +29,13 @@ POS_POKEMON_IA = (1030, 160)        # Posicion Pokemon IA
 POS_POKEMON_JUG = (300, 350)        # Posicion Pokemon Jugador
 
 # Cajas de vida (Jugador y Rival)
-BARRA_CAJA = {"rival": (93, 40, 211, 49), "jugador": (116, 40, 233, 49)}        # Barra de vida
+BARRA_CAJA = {"rival": (93, 40, 211, 48), "jugador": (117, 39, 233, 48)}        # Barra de vida
 POS_CAJA = {"rival": (600, 100), "jugador": (1200, 650)}                        # Posicion caja de vida
+
+# Barra de energía (solo la caja del jugador), justo debajo de la de vida. Píxeles originales de la imagen: x0, y0, x1, y1
+BARRA_ENERGIA = (115, 53, 237, 58)
+COLOR_ENERGIA = ((60, 150, 235), (150, 205, 255))            # Cargando: (color, brillo)
+COLOR_ENERGIA_LISTA = ((250, 190, 30), (255, 240, 150))      # Llena (la habilidad fuerte ya se puede usar)
 
 # Botones pantalla combate (x, y, ancho, alto)
 RECT_LUCHAR = pygame.Rect(900, 880, 260, 60)                # LUCHAR
@@ -69,6 +75,7 @@ class EscenaCombate:
         self.combate = combate
         self.escenario = escenario  # índice en ESCENARIOS (fondo + bases)
         self.hp_visible = {}        # quien -> (nombre, hp mostrado) para animar el vaciado de la barra
+        self.energia_visible = {}   # quien -> (nombre, energía mostrada) para animar el llenado de la barra
         # Frames que le quedan al parpadeo blanco de cada lado cuando recibe daño
         self.flash = {"ia": 0, "jugador": 0}
         self.gestor = efectos.GestorEfectos()   # animaciones de las habilidades
@@ -146,6 +153,49 @@ class EscenaCombate:
         self.hp_visible[quien] = (nombre, valor)
         return valor
 
+    # Energía que se muestra en la barra: se acerca poco a poco a la real (igual que la vida)
+    def _energia_visible(self, quien, nombre, energia):
+        guardado = self.energia_visible.get(quien)
+        if guardado is None or guardado[0] != nombre:
+            valor = energia
+        else:
+            valor = guardado[1]
+            paso = ENERGIA_MAX / 60
+            if valor > energia:
+                valor = max(energia, valor - paso)
+            elif valor < energia:
+                valor = min(energia, valor + paso)
+        self.energia_visible[quien] = (nombre, valor)
+        return valor
+
+    # Barra de energía bajo la de vida: se llena con cada ataque o golpe recibido y brilla cuando alcanza para la habilidad fuerte
+    def _dibujar_barra_energia(self, pantalla, caja_x, caja_y, nombre, energia):
+        x0, y0, x1, y1 = BARRA_ENERGIA
+        barra_x = caja_x + int(x0 * ESCALA_CAJA)
+        barra_y = caja_y + int(y0 * ESCALA_CAJA)
+        barra_ancho = int((x1 - x0 + 1) * ESCALA_CAJA)
+        barra_alto = int((y1 - y0 + 1) * ESCALA_CAJA)
+
+        # Fondo (pista) de la barra
+        pista = pygame.Rect(barra_x, barra_y, barra_ancho, barra_alto)
+        pygame.draw.rect(pantalla, (250, 252, 250), pista, border_radius=4)
+
+        # Relleno según la energía mostrada
+        mostrada = self._energia_visible("jugador", nombre, energia)
+        proporcion = max(0.0, min(1.0, mostrada / ENERGIA_MAX))
+        lista = energia >= COSTO_FUERTE
+        color, brillo = COLOR_ENERGIA_LISTA if lista else COLOR_ENERGIA
+        ancho = int(barra_ancho * proporcion)
+        if ancho > 0:
+            pygame.draw.rect(pantalla, color, (barra_x, barra_y, ancho, barra_alto), border_radius=4)
+            pygame.draw.rect(pantalla, brillo, (barra_x + 2, barra_y + 1, max(0, ancho - 4), max(1, barra_alto // 3)), border_radius=3)
+        pygame.draw.rect(pantalla, (105, 117, 93), pista, 2, border_radius=4)
+
+        # Cuando está llena, el borde parpadea suavemente para avisar que la habilidad fuerte está lista
+        if lista:
+            pulso = (pygame.time.get_ticks() // 300) % 2 == 0
+            pygame.draw.rect(pantalla, (255, 255, 255) if pulso else (250, 190, 30), pista.inflate(4, 4), 2, border_radius=5)
+
     # Configuracion de la caja de vida Jugador y IA
     def _dibujar_caja_vida(self, pantalla, lado, nombre, hp, hp_max, mostrar_numeros):
         caja = obtener_caja(lado)
@@ -184,8 +234,9 @@ class EscenaCombate:
             pygame.draw.rect(pantalla, color, (barra_x, barra_y, ancho, barra_alto), border_radius=4)
             pygame.draw.rect(pantalla, brillo, (barra_x + 2, barra_y + 2, max(0, ancho - 4), max(1, barra_alto // 3)), border_radius=3)
 
-        # Solo la caja del jugador muestra la vida en números
+        # Solo la caja del jugador muestra la energía (debajo de la vida) y la vida en números
         if mostrar_numeros:
+            self._dibujar_barra_energia(pantalla, caja_x, caja_y, nombre, self.combate.energia["jugador"][nombre])
             txt_hp = FUENTE_CHICA.render(f"{hp} / {hp_max}", True, NEGRO)
             x_num = caja_x + int((barra_x0 + 120) * ESCALA_CAJA)   # borde derecho del texto
             y_num = caja_y + int((barra_y0 + 20) * ESCALA_CAJA)    # borde superior del texto
