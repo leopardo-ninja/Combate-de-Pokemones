@@ -1,5 +1,7 @@
 # ----------------- ESCENARIOS DEL MODO ARENA -----------------
 
+# ===== TEMA: Listas (Clase 11) + Diccionarios (Clase 11) =====
+# ESCENARIOS es una lista de diccionarios; cada uno guarda los datos de un escenario (con tuplas de colores)
 # Cada escenario tiene: nombre, número de fondo (assets/fondos/fondo_XX.png; None = degradado),
 # número de base (assets/bases/rival_XX.png y jugador_XX.png),
 # colores del cielo (arriba, abajo) y color del suelo. Los degradados solo se usan si no hay imagen de fondo

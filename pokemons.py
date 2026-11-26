@@ -1,6 +1,8 @@
 # ----------------- BASE DE DATOS DE LOS 25 POKÉMON -----------------
 
 
+# ===== TEMA: Diccionarios (Clase 11) =====
+# Diccionario tipo -> lista de nombres
 # Pokémons agrupados por tipo (cada tipo es una sección en la selección y en la biblioteca)
 SECCIONES_POKEMON = {
     "FUEGO": ["charmander", "vulpix", "growlithe", "ponyta", "magmar"],
@@ -10,6 +12,8 @@ SECCIONES_POKEMON = {
     "TIERRA": ["sandshrew", "geodude", "cubone", "phanpy", "diglett"],
 }
 
+# ===== TEMA: Diccionarios anidados (Clase 11) =====
+# nombre -> diccionario de datos; 'habilidades' es una lista de tuplas (nombre, potencia, tipo)
 # Datos de cada Pokémon: tipo, vida (hp), estadísticas base, descripción y sus 4 habilidades.
 # Cada habilidad es (nombre, potencia, tipo); las de tipo "Estado" tienen potencia 0 y no hacen daño
 CATALOGO_POKEMONS = {
@@ -140,6 +144,8 @@ CATALOGO_POKEMONS = {
     },
 }
 
+# ===== TEMA: Bucles (Clase 4) + Listas (Clase 11) =====
+# for anidado sobre dict.items(); append agrega cada nombre a la lista
 # Lista única con todos los pokémons en orden (la selección la usa para moverse con las flechas)
 LISTA_PLANA_POKES = []
 for tipo_seccion, nombres_pokemons in SECCIONES_POKEMON.items():
