@@ -2,7 +2,7 @@
 import pygame
 
 from config import (
-    BLANCO, AZUL_DS, VERDE_BOTON, COLORES_TIPO, FUENTE, FUENTE_CHICA, FUENTE_GRANDE
+    BLANCO, AZUL_DS, COLORES_TIPO, FUENTE, FUENTE_CHICA, FUENTE_GRANDE
 )
 from pokemons import SECCIONES_POKEMON, CATALOGO_POKEMONS
 from .utilidades import pos_virtual, dibujar_resalte
@@ -13,7 +13,8 @@ COLUMNAS_SEL = 6
 CELDA_SEL = (215, 150)
 ORIGEN_SEL = (60, 120)
 FILAS_VISIBLES_SEL = 5                     # filas que caben en pantalla; si hay más, la cuadrícula se desplaza
-RECT_PANEL_SEL = pygame.Rect(1360, 120, 520, 800)
+RECT_PANEL_SEL = pygame.Rect(1360, 120, 520, 800)          # panel alto (lo usa la Pokédex para la ficha)
+RECT_PANEL_VISTA_SEL = pygame.Rect(1360, 120, 520, 560)    # panel de la selección: solo imagen, nombre y tipo
 TAM_POKEMON_CELDA = (96, 96)
 TAM_POKEMON_PANEL = (400, 400)
 
@@ -95,8 +96,16 @@ class EscenaSeleccion:
         if nombre in self.equipo:
             self.equipo.remove(nombre)
             return "quitado"
+        # Con el equipo ya completo no se puede elegir otro (hay que quitar uno antes)
+        if len(self.equipo) >= self.meta:
+            return None
         self.equipo.append(nombre)
         return "completo" if len(self.equipo) == self.meta else "elegido"
+
+    # Al volver desde las estadísticas se quita el último elegido, para poder cambiarlo
+    def deshacer_ultimo(self):
+        if self.equipo:
+            self.equipo.pop()
 
     # Clic sobre una celda: la resalta y la elige. Devuelve lo mismo que elegir() o None si no se pulsó ninguna
     def clic(self, pos_real):
@@ -118,46 +127,32 @@ class EscenaSeleccion:
             if not self._visible(i):
                 continue
             rect = self._rect(i)
-            elegido = nombre in self.equipo
-            resaltado = (i == self.idx)
+            # Resaltada: la que tiene el foco (flechas / mouse) y también las ya elegidas, que se quedan marcadas
+            resaltado = (i == self.idx) or (nombre in self.equipo)
             pygame.draw.rect(pantalla, (55, 65, 100) if resaltado else (35, 42, 60), rect, border_radius=12)
-            # Borde: verde si ya está en el equipo; si no, el color de su tipo
-            color_borde = (100, 255, 100) if elegido else COLORES_TIPO.get(self.tipos[i], (70, 85, 120))
-            pygame.draw.rect(pantalla, color_borde, rect, 4 if (elegido or resaltado) else 2, border_radius=12)
+            pygame.draw.rect(pantalla, COLORES_TIPO.get(self.tipos[i], (70, 85, 120)), rect, 4 if resaltado else 2, border_radius=12)
             if resaltado:
                 dibujar_resalte(pantalla, rect)
             imagen = obtener_pokemon(nombre, "frente", TAM_POKEMON_CELDA)
             if imagen:
                 pantalla.blit(imagen, imagen.get_rect(midtop=(rect.centerx, rect.y + 8)))
-            txt = FUENTE_CHICA.render(nombre.capitalize(), True, (100, 255, 100) if elegido else BLANCO)
+            txt = FUENTE_CHICA.render(nombre.capitalize(), True, BLANCO)
             pantalla.blit(txt, txt.get_rect(center=(rect.centerx, rect.bottom - 22)))
-            # Insignia con el orden en que se eligió
-            if elegido:
-                centro = (rect.right - 24, rect.y + 24)
-                pygame.draw.circle(pantalla, VERDE_BOTON, centro, 16)
-                pygame.draw.circle(pantalla, BLANCO, centro, 16, 2)
-                num = FUENTE_CHICA.render(str(self.equipo.index(nombre) + 1), True, BLANCO)
-                pantalla.blit(num, num.get_rect(center=centro))
         pantalla.set_clip(None)
 
-        # Panel de vista previa del pokémon resaltado
+        # Panel de vista previa del pokémon con el foco
         nombre = self.lista[self.idx]
         datos = CATALOGO_POKEMONS[nombre]
-        pygame.draw.rect(pantalla, (40, 45, 65), RECT_PANEL_SEL, border_radius=15)
-        pygame.draw.rect(pantalla, AZUL_DS, RECT_PANEL_SEL, 4, border_radius=15)
+        panel = RECT_PANEL_VISTA_SEL
+        pygame.draw.rect(pantalla, (40, 45, 65), panel, border_radius=15)
+        pygame.draw.rect(pantalla, COLORES_TIPO.get(datos["tipo"].upper(), AZUL_DS), panel, 4, border_radius=15)
         imagen = obtener_pokemon(nombre, "frente", TAM_POKEMON_PANEL)
         if imagen:
-            pantalla.blit(imagen, imagen.get_rect(midtop=(RECT_PANEL_SEL.centerx, RECT_PANEL_SEL.y + 20)))
-        txt = FUENTE_GRANDE.render(nombre.upper(), True, (255, 230, 50))
-        pantalla.blit(txt, txt.get_rect(center=(RECT_PANEL_SEL.centerx, RECT_PANEL_SEL.y + 450)))
-        txt = FUENTE.render(f"Tipo: {datos['tipo']} | HP: {datos['hp']}", True, (255, 220, 50))
-        pantalla.blit(txt, txt.get_rect(center=(RECT_PANEL_SEL.centerx, RECT_PANEL_SEL.y + 500)))
-
-        # Equipo elegido hasta ahora
-        pantalla.blit(FUENTE.render(f"Equipo ({len(self.equipo)}/{self.meta}):", True, (200, 220, 250)), (RECT_PANEL_SEL.x + 30, RECT_PANEL_SEL.y + 560))
-        for k, elegido_nombre in enumerate(self.equipo):
-            pantalla.blit(FUENTE.render(f"{k + 1}. {elegido_nombre.capitalize()}", True, (100, 255, 100)),
-                          (RECT_PANEL_SEL.x + 30, RECT_PANEL_SEL.y + 605 + k * 40))
+            pantalla.blit(imagen, imagen.get_rect(midtop=(panel.centerx, panel.y + 20)))
+        txt = FUENTE_GRANDE.render(nombre.upper(), True, COLORES_TIPO.get(datos["tipo"].upper(), AZUL_DS))
+        pantalla.blit(txt, txt.get_rect(center=(panel.centerx, panel.y + 450)))
+        txt = FUENTE.render(f"Tipo: {datos['tipo']}", True, COLORES_TIPO.get(datos["tipo"].upper(), AZUL_DS))
+        pantalla.blit(txt, txt.get_rect(center=(panel.centerx, panel.y + 500)))
 
         ayuda = "Flechas + ENTER para elegir (otra vez para quitar) | ESC para volver"
         if self.filas > FILAS_VISIBLES_SEL:

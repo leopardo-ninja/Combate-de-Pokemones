@@ -16,7 +16,6 @@ def sonido_seleccion():
 
 
 # Traduce una tecla del combate a una acción (la misma que produce un clic).
-#
 # Las flechas solo mueven el botón resaltado; ENTER elige el resaltado; ESC vuelve.
 def tecla_a_accion(tecla, escena):
     # Flechas: solo mueven el botón resaltado
@@ -98,9 +97,8 @@ def main():
     escena_combate = None
     retraso_ia = 0
 
-    # Botones del menú principal (x, y, ancho, alto, texto), uno debajo del otro
-    textos_menu = ["Modo Arena", "Pokédex", "Salir"]
-    botones_menu = [ui.Boton(710, 430 + i * 90, 500, 70, texto) for i, texto in enumerate(textos_menu)]
+    # Botones del menú principal (se definen en ui/menu.py)
+    botones_menu = ui.crear_botones_menu()
 
     # Bucle principal: cada vuelta procesa los eventos, actualiza y dibuja un frame
     while ejecutando:
@@ -175,6 +173,7 @@ def main():
                     comenzar_combate = True
                 # Clic derecho = volver a la selección de equipo (como ESC)
                 elif evento.button == 3:
+                    escena_seleccion.deshacer_ultimo()
                     estado_app = "seleccion"
 
             # --- Mouse en la pokédex ---
@@ -248,6 +247,7 @@ def main():
                     if evento.key == pygame.K_RETURN or evento.key == pygame.K_SPACE:
                         comenzar_combate = True
                     elif evento.key == pygame.K_ESCAPE:
+                        escena_seleccion.deshacer_ultimo()
                         estado_app = "seleccion"
 
                 elif estado_app == "combate":

@@ -29,7 +29,8 @@ def rect_celda_arena(idx):
 class EscenaArena:
 
     def __init__(self):
-        self.formato = 0          # índice en FORMATOS
+        self.formato = 0          # índice en FORMATOS (el elegido de verdad: solo cambia con clic)
+        self.formato_foco = 0     # botón de formato resaltado (flechas / mouse), no cambia la selección
         self.escenario = 0        # índice en ESCENARIOS
         self.foco = "grid"        # "formato" o "grid": dónde están las flechas
 
@@ -37,15 +38,15 @@ class EscenaArena:
     def modo(self):
         return FORMATOS[self.formato]
 
-    # Flechas. Con el foco en "formato": izquierda/derecha cambian 1v1/3v3 y abajo baja a la cuadrícula.
+    # Flechas. Con el foco en "formato": izquierda/derecha solo mueven el resalte entre 1v1/3v3 y abajo baja a la cuadrícula.
     # En la cuadrícula: se mueve entre escenarios y, desde la primera fila, arriba sube al formato
     def mover(self, tecla):
         cantidad_escenarios = len(ESCENARIOS)
         if self.foco == "formato":
             if tecla == pygame.K_LEFT:
-                self.formato = 0
+                self.formato_foco = 0
             elif tecla == pygame.K_RIGHT:
-                self.formato = 1
+                self.formato_foco = 1
             elif tecla == pygame.K_DOWN:
                 self.foco = "grid"
             return
@@ -69,13 +70,13 @@ class EscenaArena:
             return None
         return "continuar"
 
-    # Mouse encima: el foco pasa al formato o escenario que esté bajo el cursor
+    # Mouse encima: solo mueve el resalte (no cambia el formato elegido)
     def pasar_mouse(self, pos_real):
         pos = pos_virtual(pos_real)
         for i, rect_boton in enumerate(RECT_FORMATOS):
             if rect_boton.collidepoint(pos):
                 self.foco = "formato"
-                self.formato = i
+                self.formato_foco = i
                 return
         for i in range(len(ESCENARIOS)):
             if rect_celda_arena(i).collidepoint(pos):
@@ -89,6 +90,7 @@ class EscenaArena:
         for i, rect_boton in enumerate(RECT_FORMATOS):
             if rect_boton.collidepoint(pos):
                 self.foco = "formato"
+                self.formato_foco = i
                 self.formato = i
                 return None
         for i in range(len(ESCENARIOS)):
@@ -102,7 +104,7 @@ class EscenaArena:
         pantalla.fill((25, 28, 40))
         pantalla.blit(FUENTE_GRANDE.render("MODO ARENA", True, BLANCO), (60, 30))
 
-        # Formato
+        # Formato: el verde marca el elegido (clic); el borde resaltado marca el foco (flechas / mouse)
         for i, rect_formato in enumerate(RECT_FORMATOS):
             activo = (i == self.formato)
             pygame.draw.rect(pantalla, VERDE_BOTON if activo else (45, 52, 75), rect_formato, border_radius=12)
@@ -110,7 +112,7 @@ class EscenaArena:
             etiqueta = "1 vs 1" if i == 0 else "3 vs 3"
             txt = FUENTE_GRANDE.render(etiqueta, True, BLANCO)
             pantalla.blit(txt, txt.get_rect(center=rect_formato.center))
-            if self.foco == "formato" and activo:
+            if self.foco == "formato" and i == self.formato_foco:
                 dibujar_resalte(pantalla, rect_formato)
 
         # Cuadrícula de escenarios
