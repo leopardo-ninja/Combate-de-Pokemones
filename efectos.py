@@ -622,43 +622,20 @@ def construir(nombre, tipo, atacante):
     if nombre == "Huesomerang":
         return proyectil(punto_salida, destino, (80,), cantidad = 1, escala = 6, duracion = 44, giro_por_frame = 34, ida_vuelta = True, ids_impacto = (233,), sacude = 10, altura_arco = 60)
 
-    # ===== TEMA: Condicionales (Clase 4) =====
-    # if anidados: cada habilidad de Estado sube o baja una estadística
-    # ---------- ESTADO (baldosas de estadísticas) ----------
-    # Habilidades de Estado: cada una sube una estadística propia (baldosa hacia arriba) o baja una del rival (hacia abajo)
+    # ===== TEMA: Condicionales (Clase 4) + Listas (Clase 11) =====
+    # if + return anticipado; lista por comprensión con for/range y random.randint
+    # ---------- ESTADO = POCIÓN + ESCUDO (siempre sobre quien la usa) ----------
+    # Todas las habilidades de Estado son la misma: el Pokémon se cura y se protege con un escudo.
+    # Por eso TODAS dibujan el efecto sobre el atacante (origen) y ninguna sobre el rival (destino),
+    # sin importar si antes eran de "ataque" (bajaban una estadística del rival) o de "defensa"
     if tipo == "Estado":
-        if nombre in ("Foco Energía", "Acuchillar"):
-            return tile(atacante, "ataque", True)
-        if nombre in ("Refugio", "Defensa Férrea", "Fortaleza"):
-            return tile(atacante, "defensa", True)
-        if nombre == "Agilidad":
-            return tile(atacante, "velocidad", True)
-        if nombre in ("Amnesia", "Pantalla Luz", "Pantalla de Luz"):
-            return tile(atacante, "def_esp", True)
-        if nombre == "Crecimiento":
-            return tile(atacante, "atk_esp", True)
-        if nombre in ("Rugido", "Growl"):
-            return tile(rival, "ataque", False)
-        if nombre == "Malicioso":
-            return tile(rival, "defensa", False)
-        if nombre in ("Pantalla Humo", "Supersónico"):
-            return tile(rival, "precision", False)
-        if nombre == "Infortunio":
-            return tile(rival, "evasion", False)
-        if nombre == "Encanto":
-            return tile(rival, "ataque", False, [Particula((166, 165, 167), k * 6, 34, (destino[0] + (k - 1) * 70, destino[1] + 40),
-                                                         (destino[0] + (k - 1) * 90, destino[1] - 140), escala=5, alpha_fin=0) for k in range(3)])
-        if nombre in ("Hipnosis", "Polvo Sueño", "Smog"):
-            return tile(rival, "mezcla", False, [Particula((205, 207, 206), k * 4, 30, (destino[0] + random.randint(-80, 80), destino[1] - 40),
-                                                           (destino[0] + random.randint(-80, 80), destino[1] - 160), escala=4, alpha_fin=0) for k in range(6)])
-        if nombre == "Onda Trueno":
-            return {"elementos": [Particula((204, 205, 206, 207), 0, 40, destino, destino, escala=6, frames_por_cuadro=2, amplitud_temblor=60),
-                           Particula((154,), 0, 40, destino, destino, escala=4, frames_por_cuadro=3, amplitud_temblor=8)], "impacto": 6, "temblor": "objetivo"}
-        if nombre in ("Recuperación", "Drenadoras"):
-            return {"elementos": [Particula((200, 201, 202, 203), k * 5, 40, (origen[0] + random.randint(-120, 120), origen[1] + 120),
-                                     (origen[0] + random.randint(-120, 120), origen[1] - 140), escala=4, frames_por_cuadro=3, alpha_fin=0) for k in range(10)],
-                    "impacto": 10}
-        return tile(atacante, "mezcla", True)
+        # Partículas de curación que suben alrededor del atacante (las mismas de Recuperación/Drenadoras)
+        curacion = [Particula((200, 201, 202, 203), k * 4, 34, (origen[0] + random.randint(-110, 110), origen[1] + 110),
+                              (origen[0] + random.randint(-110, 110), origen[1] - 130), escala=4, frames_por_cuadro=3, alpha_fin=0) for k in range(8)]
+        # Dos anillos que se expanden desde el atacante: el escudo
+        escudo = [Anillo(origen, 4, 30, 50, 170, (120, 200, 255), 8), Anillo(origen, 12, 30, 50, 190, (180, 230, 255), 5)]
+        # impacto = frame en el que el motor aplica la cura (el texto "+N HP" sale sobre el atacante)
+        return {"elementos": curacion + escudo, "impacto": 10}
 
     # ===== TEMA: Diccionarios (Clase 11) + Tuplas (Clase 11) =====
     # .get() con valor por defecto y desempaquetado de tupla

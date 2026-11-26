@@ -1,7 +1,24 @@
 # Constantes compartidas por todo el juego: resolución, colores y fuentes
 
 # ===== TEMA: Modularidad (Clase 10) =====
-# Se importa el módulo pygame
+# Se importan sys (para saber el sistema operativo) y pygame
+import sys
+
+# ===== TEMA: Pygame (fuera de temario) + Condicionales (Clase 4) =====
+# Windows: avisa que el juego maneja el escalado de pantalla (125 %, 150 %...). Sin esto Windows estira la imagen y se ve borrosa.
+# Debe ejecutarse ANTES de import pygame / pygame.init(). En Mac y Linux no hace nada
+if sys.platform == "win32":
+    import ctypes
+    try:
+        # 2 = consciente del escalado de cada monitor (Windows 8.1 en adelante)
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            # Respaldo para Windows más antiguos
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 import pygame
 
 # Pygame debe iniciarse antes de crear las fuentes
@@ -63,4 +80,4 @@ RUTA_FUENTE = "assets/fuentes/PixelifySans-Regular.ttf"
 FUENTE = pygame.font.Font(RUTA_FUENTE, 26)
 FUENTE_CHICA = pygame.font.Font(RUTA_FUENTE, 20)
 FUENTE_GRANDE = pygame.font.Font(RUTA_FUENTE, 38)
-FUENTE_HABILIDAD = pygame.font.Font(RUTA_FUENTE, 25) 
+FUENTE_HABILIDAD = pygame.font.Font(RUTA_FUENTE, 25)

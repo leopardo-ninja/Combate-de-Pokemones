@@ -116,7 +116,7 @@ class EscenaCombate:
             self.flash[quien] -= 1
             if (self.flash[quien] // 4) % 2 == 0:
                 destello = imagen_pokemon.copy()
-                destello.fill((255, 255, 255, 180), special_flags=pygame.BLEND_RGBA_ADD)
+                destello.fill((255, 255, 255, 180), special_flags=pygame.BLEND_RGB_ADD) #Cambio del cuadro 
                 pantalla.blit(destello, pos)
                 return
         pantalla.blit(imagen_pokemon, pos)
