@@ -16,7 +16,7 @@ SECCIONES_POKEMON = {
 # Cuarta habilidad de todos los Pokémon: la Poción. Es una tupla (nombre, potencia, tipo) compartida por los 25 (una tupla no se puede modificar,
 # así que compartirla es seguro). No hace daño: cura un poco y activa un escudo que bloquea el siguiente ataque (ver motor_combate.py).
 # Para cambiarle el nombre a todos los Pokémon a la vez basta con cambiarlo aquí
-POCION = ("Poción", 0, "Estado")
+POCION = ("Recuperación", 0, "Estado")
 
 # ===== TEMA: Diccionarios anidados (Clase 11) =====
 # nombre -> diccionario de datos; 'habilidades' es una lista de tuplas (nombre, potencia, tipo)

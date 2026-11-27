@@ -102,7 +102,7 @@ class EscenaArena:
 
     def dibujar(self, pantalla):
         pantalla.fill((25, 28, 40))
-        pantalla.blit(FUENTE_GRANDE.render("MODO ARENA", True, BLANCO), (60, 30))
+        pantalla.blit(FUENTE_GRANDE.render("COMBATE", True, BLANCO), (60, 30))
 
         # Formato: el verde marca el elegido (clic); el borde resaltado marca el foco (flechas / mouse)
         for i, rect_formato in enumerate(RECT_FORMATOS):
@@ -140,7 +140,3 @@ class EscenaArena:
         pantalla.blit(nombre, nombre.get_rect(center=(vista_x + TAM_VISTA_PREVIA[0] // 2, vista_y + TAM_VISTA_PREVIA[1] + 50)))
         modo = FUENTE.render(f"Formato: {self.modo}", True, BLANCO)
         pantalla.blit(modo, modo.get_rect(center=(vista_x + TAM_VISTA_PREVIA[0] // 2, vista_y + TAM_VISTA_PREVIA[1] + 100)))
-
-        # Texto de ayuda con los controles
-        ayuda = FUENTE.render("Flechas: mover  |  ENTER / clic: elegir escenario  |  ESC: volver", True, (180, 190, 210))
-        pantalla.blit(ayuda, (60, 1020))

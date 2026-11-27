@@ -3,6 +3,7 @@ import pygame
 
 import sonido
 import efectos
+import entrada_pokemon
 from config import (
     BLANCO, NEGRO, GRIS_CLARO, GRIS_OSCURO, AZUL_BOTON, ROJO_BOTON, VERDE_BOTON, FUENTE, FUENTE_CHICA, FUENTE_GRANDE, FUENTE_HABILIDAD, RUTA_FUENTE
 )
@@ -76,6 +77,9 @@ class EscenaCombate:
         self.escenario = escenario  # índice en ESCENARIOS (fondo + bases)
         self.hp_visible = {}        # quien -> (nombre, hp mostrado) para animar el vaciado de la barra
         self.energia_visible = {}   # quien -> (nombre, energía mostrada) para animar el llenado de la barra
+        # Entrada de los Pokémon con la Poké Ball: qué Pokémon había en el frame anterior y la animación en curso de cada lado
+        self.nombres_vistos = {"ia": None, "jugador": None}
+        self.entradas = {"ia": None, "jugador": None}
         # Frames que le quedan al parpadeo blanco de cada lado cuando recibe daño
         self.flash = {"ia": 0, "jugador": 0}
         self.gestor = efectos.GestorEfectos()   # animaciones de las habilidades
@@ -86,7 +90,7 @@ class EscenaCombate:
 
     # True mientras se reproduce la animación de una habilidad.
     def ocupado(self):
-        return self.gestor.ocupado()
+        return self.gestor.ocupado() or any(entrada is not None for entrada in self.entradas.values())
 
     # Anima la habilidad; 'al_impactar' (aplicar el daño en el motor) se llama en el golpe.
     def lanzar_habilidad(self, quien, habilidad, al_impactar, mensaje=None):
@@ -116,10 +120,35 @@ class EscenaCombate:
             self.flash[quien] -= 1
             if (self.flash[quien] // 4) % 2 == 0:
                 destello = imagen_pokemon.copy()
-                destello.fill((255, 255, 255, 180), special_flags=pygame.BLEND_RGB_ADD) #Cambio del cuadro 
+                destello.fill((255, 255, 255, 180), special_flags=pygame.BLEND_RGBA_ADD)
                 pantalla.blit(destello, pos)
                 return
         pantalla.blit(imagen_pokemon, pos)
+
+    # Si el Pokémon activo cambió (inicio del combate, relevo o uno debilitado), el nuevo entra lanzado desde una Poké Ball
+    def _revisar_entradas(self):
+        for quien, nombre in (("ia", self.combate.nombre_ia), ("jugador", self.combate.nombre_jugador)):
+            if nombre != self.nombres_vistos[quien]:
+                primera_vez = self.nombres_vistos[quien] is None
+                self.nombres_vistos[quien] = nombre
+                # Al empezar el combate el del jugador sale un poco después que el rival
+                retraso = 25 if (primera_vez and quien == "jugador") else 0
+                self.entradas[quien] = entrada_pokemon.EntradaPokemon(quien, retraso)
+
+    # Dibuja la animación de entrada si la hay; si no, el Pokémon normal (con su parpadeo de daño)
+    def _dibujar_pokemon_o_entrada(self, pantalla, imagen_pokemon, pos, quien):
+        entrada = self.entradas[quien]
+        if entrada is None:
+            self._dibujar_pokemon(pantalla, imagen_pokemon, pos, quien)
+            return
+        entrada.dibujar(pantalla, imagen_pokemon, pos)
+        if entrada.terminada():
+            self.entradas[quien] = None
+
+    # La caja de vida aparece cuando el Pokémon ya salió de la bola
+    def _caja_visible(self, quien):
+        entrada = self.entradas[quien]
+        return entrada is None or entrada.salio()
 
     # Dibuja el texto de daño subiendo poco a poco mientras dura su contador
     def _dibujar_texto_flotante(self, pantalla, quien, x, y_base):
@@ -316,6 +345,7 @@ class EscenaCombate:
         self._procesar_eventos()
         self._sincronizar()
         combate = self.combate
+        self._revisar_entradas()
         tema = TEMAS_TIPO_COMBATE.get(combate.datos_jugador["tipo"], TEMAS_TIPO_COMBATE["Fuego"])
         pokemon_ia = obtener_pokemon(combate.nombre_ia, "frente", (500, 500), (200, 50, 50))           #Pokemon rival tamano
         pokemon_jugador = obtener_pokemon(combate.nombre_jugador, "espalda", (680, 680), (50, 100, 200))    #Pokemon aliado tamano
@@ -329,8 +359,8 @@ class EscenaCombate:
         desplazamiento_jugador = self.gestor.desplazamiento("jugador")
         pos_ia = (POS_POKEMON_IA[0] + desplazamiento_ia[0], POS_POKEMON_IA[1] + desplazamiento_ia[1])
         pos_jug = (POS_POKEMON_JUG[0] + desplazamiento_jugador[0], POS_POKEMON_JUG[1] + desplazamiento_jugador[1])
-        self._dibujar_pokemon(pantalla, pokemon_ia, pos_ia, "ia") #Pokemon rival posicion
-        self._dibujar_pokemon(pantalla, pokemon_jugador, pos_jug, "jugador") #Pokemon aliado posicion
+        self._dibujar_pokemon_o_entrada(pantalla, pokemon_ia, pos_ia, "ia") #Pokemon rival posicion
+        self._dibujar_pokemon_o_entrada(pantalla, pokemon_jugador, pos_jug, "jugador") #Pokemon aliado posicion
         # Efectos de las habilidades (baldosas de stats sobre la silueta y partículas)
         self.gestor.dibujar_sobre_pokemons(pantalla, {"ia": (pokemon_ia, pos_ia), "jugador": (pokemon_jugador, pos_jug)})
         self.gestor.dibujar(pantalla)
@@ -339,8 +369,10 @@ class EscenaCombate:
         self._dibujar_texto_flotante(pantalla, "jugador", 500, 470)
 
         # Cajas de vida: la del rival sin números y la del jugador con ellos
-        self._dibujar_caja_vida(pantalla, "rival", combate.nombre_ia, combate.hp_actual_ia, combate.hp_max_ia, False)
-        self._dibujar_caja_vida(pantalla, "jugador", combate.nombre_jugador, combate.hp_actual_jugador, combate.hp_max_jugador, True)
+        if self._caja_visible("ia"):
+            self._dibujar_caja_vida(pantalla, "rival", combate.nombre_ia, combate.hp_actual_ia, combate.hp_max_ia, False)
+        if self._caja_visible("jugador"):
+            self._dibujar_caja_vida(pantalla, "jugador", combate.nombre_jugador, combate.hp_actual_jugador, combate.hp_max_jugador, True)
 
         eligiendo_ataque = combate.turno == "jugador" and combate.sub_menu == "luchar"
         # La barra de mensajes se ve siempre, tambien al elegir habilidad
@@ -373,7 +405,7 @@ class EscenaCombate:
                 y_txt += alto_linea
 
         # Menú principal: botones LUCHAR y CAMBIAR/POKÉMON (en 1v1 se llama POKÉMON porque no hay a quién cambiar)
-        if combate.turno == "jugador" and combate.sub_menu == "principal" and not self.gestor.ocupado():
+        if combate.turno == "jugador" and combate.sub_menu == "principal" and not self.ocupado():
             # Texto boton LUCHAR
             pygame.draw.rect(pantalla, ROJO_BOTON, RECT_LUCHAR, border_radius=12)
             pygame.draw.rect(pantalla, NEGRO, RECT_LUCHAR, 3, border_radius=12)
@@ -472,7 +504,7 @@ class EscenaCombate:
 
         # Borde en el botón seleccionado (con flechas o con el mouse)
         zonas = self.zonas_navegables()
-        if 0 <= self.seleccion < len(zonas) and not self.gestor.ocupado():
+        if 0 <= self.seleccion < len(zonas) and not self.ocupado():
             # En el cambio de Pokémon la propia caja seleccionada ya marca la selección
             es_equipo = combate.turno == "jugador" and combate.sub_menu == "cambiar" and isinstance(zonas[self.seleccion][0], tuple)
             if not es_equipo:

@@ -153,8 +153,3 @@ class EscenaSeleccion:
         pantalla.blit(txt, txt.get_rect(center=(panel.centerx, panel.y + 450)))
         txt = FUENTE.render(f"Tipo: {datos['tipo']}", True, COLORES_TIPO.get(datos["tipo"].upper(), AZUL_DS))
         pantalla.blit(txt, txt.get_rect(center=(panel.centerx, panel.y + 500)))
-
-        ayuda = "Flechas + ENTER para elegir (otra vez para quitar) | ESC para volver"
-        if self.filas > FILAS_VISIBLES_SEL:
-            ayuda += " | Rueda del mouse para desplazar"
-        pantalla.blit(FUENTE_CHICA.render(ayuda, True, (200, 220, 240)), (60, 1015))

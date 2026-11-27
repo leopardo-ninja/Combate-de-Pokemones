@@ -54,6 +54,3 @@ class EscenaPokedex(EscenaSeleccion):
 
         # Panel con la ficha del pokémon resaltado (la misma que se ve en las estadísticas del equipo)
         dibujar_ficha(pantalla, RECT_PANEL_SEL, self.lista[self.idx])
-
-        ayuda = "Flechas / mouse: ver pokémon | Rueda del mouse: desplazar | ESC o clic derecho: volver"
-        pantalla.blit(FUENTE_CHICA.render(ayuda, True, (200, 220, 240)), (60, 1015))
