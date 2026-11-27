@@ -2,7 +2,7 @@
 # Se importa random y datos del módulo pokemons
 import random
 
-from pokemons import CATALOGO_POKEMONS, LISTA_PLANA_POKES
+from pokemons import CATALOGO_POKEMONS, LISTA_PLANA_POKES, CATEGORIAS_POKEMON
 
 
 # ===== TEMA: Funciones (Clase 7) + Algoritmos: pre y post condiciones (Clase 2) =====
@@ -17,11 +17,19 @@ def calcular_multiplicador(tipo_ataque, tipo_defensor):
     # Diccionario tipo -> lista de tipos contra los que es eficaz
     # Cada tipo atacante -> lista de tipos contra los que es muy eficaz
     tablas_ventajas = {
-        "Fuego": ["Planta"],
+        "Normal": [],
+        "Fuego": ["Planta", "Bicho", "Hielo"],
         "Agua": ["Fuego", "Tierra"],
         "Planta": ["Agua", "Tierra"],
         "Eléctrico": ["Agua"],
-        "Tierra": ["Fuego", "Eléctrico"],
+        "Tierra": ["Fuego", "Eléctrico", "Veneno"],
+        "Bicho": ["Planta", "Psíquico"],
+        "Veneno": ["Planta", "Bicho"],
+        "Psíquico": ["Lucha", "Veneno"],
+        "Lucha": ["Normal", "Hielo"],
+        "Fantasma": ["Fantasma", "Psíquico"],
+        "Hielo": ["Planta", "Tierra", "Dragón"],
+        "Dragón": ["Dragón"],
     }
     # ===== TEMA: Condicionales (Clase 4) + Expresiones y operadores (Clase 3) =====
     # Operadores and e in sobre un diccionario y una lista
@@ -44,6 +52,8 @@ def calcular_multiplicador(tipo_ataque, tipo_defensor):
 FACTOR_DAÑO = 0.30   # Multiplicador general: más alto = combates más cortos
 TOPE_DAÑO = 0.40     # Ningún golpe quita más de este % de la vida máxima del rival (evita one-shots)
 BONO_STAB = 1.5      # Bono si la habilidad es del mismo tipo que el Pokémon que la usa
+RATIO_MIN = 0.75     # La proporción ataque/defensa nunca baja de este valor (un Pokémon de ataque muy bajo igual hace algo de daño)
+RATIO_MAX = 1.35     # ...ni sube de este valor (uno de defensa muy baja no recibe siempre el golpe máximo)
 
 # ----------------- PP: USOS DE CADA HABILIDAD (se pueden cambiar para equilibrar el juego) -----------------
 # ===== TEMA: Expresiones y operadores (Clase 3) =====
@@ -165,13 +175,52 @@ def calcular_daño(atacante, defensor, habilidad):
     if tipo_habilidad == atacante["tipo"]:
         bono = BONO_STAB
 
-    daño = int(potencia * (ataque / defensa) * FACTOR_DAÑO * multiplicador * bono)
+    # min() y max() mantienen la proporción ataque/defensa entre RATIO_MIN y RATIO_MAX para que las estadísticas extremas no rompan el balance
+    proporcion = min(max(ataque / defensa, RATIO_MIN), RATIO_MAX)
+    daño = int(potencia * proporcion * FACTOR_DAÑO * multiplicador * bono)
 
     # ===== TEMA: Expresiones y operadores (Clase 3) =====
     # min() limita el daño; int() convierte a entero
     # Tope por golpe: un solo ataque nunca supera el % de vida máxima del rival
     daño = min(daño, int(defensor["hp"] * TOPE_DAÑO))
     return daño, multiplicador
+
+
+# ===== TEMA: Funciones (Clase 7) + Diccionarios (Clase 11) =====
+# Entrada: el nombre de un Pokémon. Salida (post-condición): un entero con la suma de sus 6 estadísticas
+# Mide qué tan fuerte es un Pokémon, para poder compararlo con otro
+def calcular_poder(nombre_pokemon):
+    datos = CATALOGO_POKEMONS[nombre_pokemon]
+    return datos["hp"] + datos["ataque"] + datos["defensa"] + datos["atk_esp"] + datos["def_esp"] + datos["velocidad"]
+
+
+# ===== TEMA: Funciones (Clase 7) + Bucles (Clase 4) + Diccionarios (Clase 11) =====
+# Entrada: el nombre de un Pokémon. Salida (post-condición): "DÉBIL", "NORMAL" o "LEGENDARIO"
+# for con .items() recorre las categorías; el operador in busca el nombre dentro de cada lista
+def obtener_categoria(nombre_pokemon):
+    for categoria, nombres in CATEGORIAS_POKEMON.items():
+        if nombre_pokemon in nombres:
+            return categoria
+    return "NORMAL"
+
+
+# ===== TEMA: Funciones (Clase 7) + Listas (Clase 11) + Bucles (Clase 4) + Condicionales (Clase 4) =====
+# Entrada: la lista con el equipo del jugador (1 o 3 nombres). Salida (post-condición): una lista del mismo tamaño con el equipo rival
+# Por cada Pokémon del jugador (en el mismo orden) el rival escoge uno de la MISMA categoría (débil, normal o legendario), sin repetir.
+# Si ya no quedan de esa categoría (hay solo 5 legendarios), escoge el que tenga el poder más cercano; min() con key= busca el más parecido
+def elegir_equipo_rival(equipo_jugador):
+    equipo_rival = []
+    for nombre_jugador in equipo_jugador:
+        categoria = obtener_categoria(nombre_jugador)
+        disponibles = [nombre for nombre in LISTA_PLANA_POKES if nombre not in equipo_jugador and nombre not in equipo_rival]
+        misma_categoria = [nombre for nombre in disponibles if obtener_categoria(nombre) == categoria]
+        if misma_categoria:
+            elegido = random.choice(misma_categoria)
+        else:
+            poder_jugador = calcular_poder(nombre_jugador)
+            elegido = min(disponibles, key=lambda nombre: abs(calcular_poder(nombre) - poder_jugador))
+        equipo_rival.append(elegido)
+    return equipo_rival
 
 
 # ===== TEMA: POO (Clase 16) =====
@@ -188,11 +237,9 @@ class Combate:
         self.equipo_jugador = list(equipo_jugador)
         self.idx_activo_jugador = 0
 
-        # ===== TEMA: Listas (Clase 11) =====
-        # Lista por comprensión con filtro (not in) y random.sample
-        # El rival recibe un equipo aleatorio del mismo tamaño, sin repetir pokémons del jugador
-        pool_disponible = [nombre_pokemon for nombre_pokemon in LISTA_PLANA_POKES if nombre_pokemon not in self.equipo_jugador]
-        self.equipo_ia = random.sample(pool_disponible, len(self.equipo_jugador))
+        # ===== TEMA: Listas (Clase 11) + Funciones (Clase 7) =====
+        # El rival recibe un equipo del mismo tamaño y de las mismas categorías (débil, normal, legendario) que el del jugador, sin repetir pokémons
+        self.equipo_ia = elegir_equipo_rival(self.equipo_jugador)
         self.idx_activo_ia = 0
 
         # ===== TEMA: Diccionarios (Clase 11) =====
@@ -454,7 +501,8 @@ class Combate:
                 self.idx_activo_ia += 1
                 self.cargar_pokemons_activos()
                 self.mensaje = f"¡El rival envió a {self.nombre_ia.capitalize()}!"
-                self.turno = "jugador"
+                # El Pokémon nuevo del rival ataca enseguida (así el jugador no recibe un turno doble gratis al debilitar a un rival)
+                self.turno = "ia"
                 self.sub_menu = "principal"
                 return
             else:

@@ -70,6 +70,14 @@ COLORES_TIPO = {
     "PLANTA": (50, 180, 70),
     "ELÉCTRICO": (220, 190, 20),
     "TIERRA": (160, 110, 50),
+    "NORMAL": (175, 175, 160),
+    "BICHO": (150, 190, 50),
+    "VENENO": (170, 80, 205),
+    "PSÍQUICO": (235, 90, 150),
+    "LUCHA": (205, 70, 60),
+    "FANTASMA": (115, 90, 190),
+    "HIELO": (110, 210, 235),
+    "DRAGÓN": (90, 110, 230),
 }
 
 # ===== TEMA: Pygame (fuera de temario) =====

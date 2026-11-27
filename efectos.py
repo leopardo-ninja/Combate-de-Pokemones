@@ -445,61 +445,78 @@ def construir(nombre, tipo, atacante):
     # ---------- NORMAL ----------
     # Ataques de contacto: el atacante embiste y el rival se sacude
     if nombre in ("Placaje", "Tacleada", "Constricción"):
-        return contacto(origen, destino, (), sacude = 10)
+        return contacto(origen, destino, (), sacude=10)
     if nombre in ("Patada",):
-        return contacto(origen, destino, (), sacude = 12)
+        return contacto(origen, destino, (), sacude=12)
     if nombre in ("Arañazo", "Acuchillar") and tipo != "Estado":
-        return contacto(origen, destino, (), extra = [Tajo(destino, 6)], sacude = 6)
+        return contacto(origen, destino, (), extra=[Tajo(destino, 6)], sacude=6)
     if nombre == "Ataque Rápido":
         # El atacante se mueve rápido de izquierda a derecha y, al terminar, estalla la estrella en el rival
         fin = 26
         return {"elementos": [_impacto(destino, (98,), fin, escala=1, escala_fin=2, duracion=16)],
                 "impacto": fin, "vaiven": (42, fin), "sacude": 8}
     if nombre == "Rapidez":
-        return proyectil(origen, destino, (145, 144), escala = 3, duracion = 12, ids_impacto = (), sacude = 6)
+        return proyectil(origen, destino, (145, 144), escala=3, duracion=12, ids_impacto=(), sacude=6)
     if nombre == "Mordisco":
-        return contacto(origen, destino, (), extra=[Particula((142,), 4, 18, destino, destino, escala = 2.5, escala_fin = 3)], sacude = 10)
+        return contacto(origen, destino, (), extra=[Particula((142,), 4, 18, destino, destino, escala=2.5, escala_fin=3)], sacude=10)
     if nombre in ("Puño Certero",):
-        return contacto(origen, destino, (), extra=[Particula((189,), 4, 14, destino, destino, escala = 3, escala_fin = 4)], sacude = 12)
+        return contacto(origen, destino, (), extra=[Particula((189,), 4, 14, destino, destino, escala=3, escala_fin=4)], sacude=12)
     if nombre == "Bofetón":
         return contacto(origen, destino, (), extra=[Particula((192,), 4, 14, (destino[0] - 90, destino[1]), (destino[0] + 90, destino[1]), escala=7)])
     if nombre == "Látigo":
-        return contacto(origen, destino, (), embestida=False, extra=[Particula((50, 51, 52), 2, 16, punto_salida, destino, escala = 3, frames_por_cuadro=3)])
+        return contacto(origen, destino, (), embestida=False, extra=[Particula((50, 51, 52), 2, 16, punto_salida, destino, escala=3, frames_por_cuadro=3)])
     if nombre == "Hueso Palo":
-        return proyectil(origen, destino, (80,), escala = 3, duracion = 22, giro_por_frame = 28, ids_impacto = (), sacude = 8)
+        return proyectil(origen, destino, (80,), escala=3, duracion=22, giro_por_frame=28, ids_impacto=(), sacude=8)
+    if nombre in ("Derribo", "Golpe Cuerpo", "Doble Filo", "Hipercolmillo"):
+        sacudida = 14 if nombre in ("Doble Filo", "Derribo") else 10
+        extra = [Particula((142,), 4, 18, destino, destino, escala=2.5, escala_fin=3)] if nombre == "Hipercolmillo" else None
+        return contacto(origen, destino, (), sacude=sacudida, extra=extra)
+    if nombre in ("Cuchillada", "Tijera X", "Megacuerno"):
+        color_tajo = (165, 215, 70) if nombre == "Tijera X" else ((220, 220, 235) if nombre == "Cuchillada" else (210, 140, 255))
+        largo_tajo = 195 if nombre == "Megacuerno" else 170
+        return contacto(origen, destino, (), extra=[Tajo(destino, 6, color=color_tajo, largo=largo_tajo)], sacude=11)
+    if nombre in ("Picotazo", "Picotazo Veneno"):
+        tinte_pico = (180, 85, 220) if nombre == "Picotazo Veneno" else None
+        return contacto(origen, destino, (), sacude=8,
+                        extra=[Particula((145,), 3, 14, punto_salida, destino, escala=3, tinte=tinte_pico)])
+    if nombre == "Hiperrayo":
+        return {"elementos": [Orbita((101, 145), origen, 0, 24, cantidad=8, radio_inicial=150, radio_final=15, escala=3, vueltas=1.0),
+                              Flash(24, 18, (255, 245, 200), 150),
+                              Haz(punto_salida, destino, 24, 30, (255, 210, 90), 85)],
+                "impacto": 26, "sacude": 16}
 
     # ---------- FUEGO ----------
     # Ráfaga de 9 llamas con algo de dispersión
     if nombre == "Lanzallamas":
         return proyectil(punto_salida, destino, (38, 39, 40), cantidad=9, escala=4, duracion=22, separacion_frames=3, spread=24, ids_impacto=(43,), escala_impacto=3, aditivo=False)
-    
+
     if nombre == "Ascuas":
         return proyectil(punto_salida, destino, (57, 58, 38), cantidad=6, escala=4, duracion=22, separacion_frames=5, spread=40, ids_impacto=(58,), escala_impacto=5)
-    
+
     # Anillo de llamas girando que se cierra sobre el rival
     if nombre == "Giro Fuego":
-        return {"elementos": [Orbita((38, 39, 40), destino, 0, 40, cantidad = 8, radio_inicial = 260, radio_final = 30, escala = 4), Flash(40, 10, (255, 150, 60), 90)],"impacto": 40, "sacude": 6}
-    
+        return {"elementos": [Orbita((38, 39, 40), destino, 0, 40, cantidad=8, radio_inicial=260, radio_final=30, escala=4), Flash(40, 10, (255, 150, 60), 90)], "impacto": 40, "sacude": 6}
+
     if nombre == "Colmillo Ígneo":
-        return contacto(origen, destino, (43,), escala = 3, extra = [Particula((142,), 4, 18, destino, destino, escala = 2.5, escala_fin = 3), _impacto(destino, (46,), 14, escala = 6)], sacude = 10)
-    
+        return contacto(origen, destino, (43,), escala=3, extra=[Particula((142,), 4, 18, destino, destino, escala=2.5, escala_fin=3), _impacto(destino, (46,), 14, escala=6)], sacude=10)
+
     if nombre == "Rueda Fuego":
-        return proyectil(punto_salida, destino, (39, 40), cantidad = 1, escala = 7, duracion = 26, altura_arco = 120, ids_impacto = (46, 47), escala_impacto = 6, giro_por_frame = 0, sacude = 10, extra = 
-                         [Particula((58,), 2, 24, punto_salida, destino, escala = 4, altura_arco = 120, alpha_fin = 0)])
-    
+        return proyectil(punto_salida, destino, (39, 40), cantidad=1, escala=7, duracion=26, altura_arco=120, ids_impacto=(46, 47), escala_impacto=6, giro_por_frame=0, sacude=10, extra=
+                         [Particula((58,), 2, 24, punto_salida, destino, escala=4, altura_arco=120, alpha_fin=0)])
+
     if nombre == "Nitrocarga":
-        return contacto(origen, destino, (46, 47), escala = 2, sacude = 12, extra = [Particula((23,), 0, 12, origen, destino, escala = 2)])
-    
+        return contacto(origen, destino, (46, 47), escala=2, sacude=12, extra=[Particula((23,), 0, 12, origen, destino, escala=2)])
+
     if nombre == "Envite Ígneo":
-        return contacto(origen, destino, (44, 44), escala = 5, sacude = 3, extra = [Particula((23,), 0, 14, origen, destino, escala = 3), Flash(12, 14, (255, 180, 80), 120)], frame_impacto = 12)
-    
+        return contacto(origen, destino, (44, 44), escala=5, sacude=3, extra=[Particula((23,), 0, 14, origen, destino, escala=3), Flash(12, 14, (255, 180, 80), 120)], frame_impacto=12)
+
     if nombre == "Puño Fuego":
-        return contacto(origen, destino, (46,), escala = 3, sacude = 12, extra = [Particula((189,), 4, 14, destino, destino, escala = 2, escala_fin = 3, tinte = (255, 70, 50)), _impacto(destino, (43,), 12, escala = 2.5)])
-    
+        return contacto(origen, destino, (46,), escala=3, sacude=12, extra=[Particula((189,), 4, 14, destino, destino, escala=2, escala_fin=3, tinte=(255, 70, 50)), _impacto(destino, (43,), 12, escala=2.5)])
+
     if nombre == "Llamarada":
         # Círculo de fuego (el mismo anillo de Giro Fuego) que viaja desde el atacante hasta el rival
         llegada = 30
-        return {"elementos": [Orbita((38, 39, 40), punto_salida, 0, llegada, cantidad=12, radio_inicial=80, radio_final=130, escala=4, vueltas=1.5, centro_final=destino), _impacto(destino, (44, 45), llegada, escala = 5, escala_fin = 4, duracion = 18), 
+        return {"elementos": [Orbita((38, 39, 40), punto_salida, 0, llegada, cantidad=12, radio_inicial=80, radio_final=130, escala=4, vueltas=1.5, centro_final=destino), _impacto(destino, (44, 45), llegada, escala=5, escala_fin=4, duracion=18),
                               Flash(llegada, 12, (255, 140, 50), 110)], "impacto": llegada, "sacude": 16}
 
     # ---------- AGUA ----------
@@ -512,13 +529,13 @@ def construir(nombre, tipo, atacante):
         elementos.append(Particula(("pistola4",), 16, 18, destino, destino, escala=3, escala_fin=4, angulo=giro, alpha_fin=0))
         return {"elementos": elementos, "impacto": 16, "sacude": 6}
     if nombre == "Burbuja":
-        return proyectil(punto_salida, destino, (22, 19, 112, 18), cantidad = 6, escala = 3, duracion = 34, separacion_frames = 6, altura_arco = 40, spread = 40, ids_impacto = (9,), escala_impacto = 3, frames_por_cuadro = 8)
+        return proyectil(punto_salida, destino, (22, 19, 112, 18), cantidad=6, escala=3, duracion=34, separacion_frames=6, altura_arco=40, spread=40, ids_impacto=(9,), escala_impacto=3, frames_por_cuadro=8)
     if nombre == "Rayos Burbuja":
-        return proyectil(punto_salida, destino, (112, 22, 113), cantidad = 10, escala = 2.5, duracion = 26, separacion_frames = 3, spread = 60, ids_impacto = (9,), escala_impacto = 3, frames_por_cuadro = 6)
+        return proyectil(punto_salida, destino, (112, 22, 113), cantidad=10, escala=2.5, duracion=26, separacion_frames=3, spread=60, ids_impacto=(9,), escala_impacto=3, frames_por_cuadro=6)
     if nombre == "Hidrobomba":
         # Chorro fijo desde la cara del atacante hasta el rival; solo cambian los 4 fotogramas
         fotogramas_hidro = ("hidro0", "hidro1", "hidro2", "hidro3")
-        return {"elementos": [Chorro(fotogramas_hidro, CARA[atacante], CARA[rival], 0, 46, ancho = 8, frames_por_cuadro = 3)],
+        return {"elementos": [Chorro(fotogramas_hidro, CARA[atacante], CARA[rival], 0, 46, ancho=8, frames_por_cuadro=3)],
                 "impacto": 8, "sacude": 10, "sacude_duracion": 36}
     if nombre == "Surf":
         # Ola animada con los 14 fotogramas de la hoja (surf00..surf13): viaja del atacante al rival creciendo
@@ -533,13 +550,13 @@ def construir(nombre, tipo, atacante):
                        Particula((18, 19), 20, 26, punto_salida, destino, escala=5, frames_por_cuadro=6), Anillo(destino, 46, 22, 20, 160, (180, 230, 255), 12)],
                 "impacto": 46, "sacude": 6}
     if nombre == "Rayo Hielo":
-        return proyectil(punto_salida, destino, (160, 161, 162, 113), cantidad = 7, escala = 4, duracion = 18, separacion_frames = 3, spread = 30, ids_impacto = (113, 160),
-                         escala_impacto = 5, extra = [Flash(18, 12, (190, 230, 255), 110)])
+        return proyectil(punto_salida, destino, (160, 161, 162, 113), cantidad=7, escala=4, duracion=18, separacion_frames=3, spread=30, ids_impacto=(113, 160),
+                         escala_impacto=5, extra=[Flash(18, 12, (190, 230, 255), 110)])
 
     # ---------- PLANTA ----------
     if nombre in ("Látigo Cepa", "Látigo Cerval"):
         escala_latigo = 8 if nombre == "Látigo Cerval" else 6
-        return contacto(origen, destino, (234,), embestida = False, sacude = 10,
+        return contacto(origen, destino, (234,), embestida=False, sacude=10,
                         extra=[Particula((50, 51, 52), 0, 14, (destino[0] - 140, destino[1] - 80), (destino[0] + 60, destino[1] + 60), escala=escala_latigo, frames_por_cuadro=3),
                                Particula((51, 52, 50), 6, 14, (destino[0] + 140, destino[1] - 80), (destino[0] - 60, destino[1] + 60), escala=escala_latigo, frames_por_cuadro=3)], frame_impacto=10)
     if nombre == "Hoja Afilada":
@@ -554,10 +571,10 @@ def construir(nombre, tipo, atacante):
     # Energía que sale del rival hacia el atacante; más partículas cuanto más fuerte es el ataque
     if nombre in ("Absorber", "Megaagotar", "Gigadrenado"):
         cantidad = {"Absorber": 6, "Megaagotar": 9, "Gigadrenado": 12}[nombre]
-        return {"elementos": [_impacto(destino, (200, 202), 0, escala = 5, duracion = 14)] + 
-                [Particula((200, 201, 202, 203), 10 + k * 3, 26, (destino[0] + random.randint(-70, 70), destino[1] + random.randint(-70, 70)), origen, escala = 3.5, frames_por_cuadro = 3, alpha_fin = 120) for k in range(cantidad)], "impacto": 6, "sacude": 6}
+        return {"elementos": [_impacto(destino, (200, 202), 0, escala=5, duracion=14)] +
+                [Particula((200, 201, 202, 203), 10 + k * 3, 26, (destino[0] + random.randint(-70, 70), destino[1] + random.randint(-70, 70)), origen, escala=3.5, frames_por_cuadro=3, alpha_fin=120) for k in range(cantidad)], "impacto": 6, "sacude": 6}
     if nombre == "Bomba Lodo":
-        return proyectil(punto_salida, destino, (238, 237), cantidad = 1, escala = 4, duracion = 24, altura_arco = 100, giro_por_frame = 14, ids_impacto = (233, 238), escala_impacto = 4, sacude = 10)
+        return proyectil(punto_salida, destino, (238, 237), cantidad=1, escala=4, duracion=24, altura_arco=100, giro_por_frame=14, ids_impacto=(233, 238), escala_impacto=4, sacude=10)
 
     # ---------- PSÍQUICO ----------
     if nombre == "Confusión":
@@ -565,11 +582,15 @@ def construir(nombre, tipo, atacante):
     if nombre == "Psíquico":
         return {"elementos": [Anillo(destino, k * 7, 34, 20, 230, (190, 110, 255), 12) for k in range(4)] +
                       [Flash(0, 40, (200, 120, 255), 90)], "impacto": 16, "sacude": 10, "temblor": "objetivo"}
+    if nombre == "Psicorrayo":
+        return {"elementos": [Anillo(destino, 8, 28, 20, 175, (235, 110, 220), 9),
+                              Haz(punto_salida, destino, 0, 26, (215, 115, 255), 55)],
+                "impacto": 14, "sacude": 10, "temblor": "objetivo"}
 
     # ---------- ELÉCTRICO ----------
     # Rayo que cae desde arriba sobre el rival
     if nombre == "Impactrueno":
-        return {"elementos": [RayoDescendente("a125_arriba", (destino[0], destino[1] + 20), 0, 18, escala = 6, frames_crecer = 5, frames_borrar = 6, amplitud_temblor = 3, estiramiento = 1.5),
+        return {"elementos": [RayoDescendente("a125_arriba", (destino[0], destino[1] + 20), 0, 18, escala=6, frames_crecer=5, frames_borrar=6, amplitud_temblor=3, estiramiento=1.5),
                        Flash(5, 8, (255, 255, 160), 110)], "impacto": 5, "sacude": 8, "temblor": "objetivo"}
     if nombre == "Onda Shock":
         return {"elementos": [Particula((154,), 0, 22, destino, destino, escala=4, frames_por_cuadro=3, amplitud_temblor=6),
@@ -580,7 +601,7 @@ def construir(nombre, tipo, atacante):
                          extra=[Particula((207, 204), 0, 20, punto_salida, destino, escala=5, frames_por_cuadro=2, amplitud_temblor=14)])
     if nombre == "Trueno":
         return {"elementos": [Particula((125,), 4, 22, (destino[0], destino[1] - 120), (destino[0], destino[1] - 120), escala=5.5, frames_por_cuadro=1, amplitud_temblor=10),
-                       Particula((125,), 14, 18, (destino[0] + 40, destino[1] - 120), (destino[0] + 40, destino[1] - 120), escala=5, amplitud_temblor=10),
+                       Particula((125,), 14, 18, (destino[0] + 40, destino[1] - 120), (destino[0] + 40, destino[1] - 120), escala=5, frames_por_cuadro=1, amplitud_temblor=10),
                        Particula((205, 206, 207), 8, 28, destino, destino, escala=7, frames_por_cuadro=2, amplitud_temblor=40),
                        Flash(4, 8, (255, 255, 255), 230), Flash(16, 8, (255, 255, 200), 200)],
                 "impacto": 6, "sacude": 18, "temblor": "objetivo"}
@@ -591,8 +612,8 @@ def construir(nombre, tipo, atacante):
                        _impacto(destino, (233, 205), 48, escala=9), Flash(48, 14, (255, 255, 180), 180)],
                 "impacto": 48, "sacude": 18}
     if nombre == "Autodestrucción":
-        return {"elementos": [Flash(0, 20, (255, 255, 255), 255), _impacto(origen, (44,), 4, escala = 10, escala_fin = 8, duracion = 30),
-                       _impacto(destino, (233,), 10, escala = 6, duracion = 16), Anillo(origen, 4, 30, 30, 520, (255, 220, 120), 16)],
+        return {"elementos": [Flash(0, 20, (255, 255, 255), 255), _impacto(origen, (44,), 4, escala=10, escala_fin=8, duracion=30),
+                       _impacto(destino, (233,), 10, escala=6, duracion=16), Anillo(origen, 4, 30, 30, 520, (255, 220, 120), 16)],
                 "impacto": 8, "sacude": 24}
     if nombre == "Puño Trueno":
         return contacto(origen, destino, (233,), escala=7, sacude=12,
@@ -620,7 +641,35 @@ def construir(nombre, tipo, atacante):
         return {"elementos": elementos, "impacto": 8, "sacude": 26 if fuerte else 14, "sacude_duracion": 50 if fuerte else 36, "sacude_a": "ambos"}
     # El hueso viaja hacia el rival y vuelve (ida_vuelta)
     if nombre == "Huesomerang":
-        return proyectil(punto_salida, destino, (80,), cantidad = 1, escala = 6, duracion = 44, giro_por_frame = 34, ida_vuelta = True, ids_impacto = (233,), sacude = 10, altura_arco = 60)
+        return proyectil(punto_salida, destino, (80,), cantidad=1, escala=6, duracion=44, giro_por_frame=34, ida_vuelta=True, ids_impacto=(233,), sacude=10, altura_arco=60)
+
+    # ---------- LUCHA ----------
+    if nombre in ("Golpe Kárate", "Sumisión", "A Bocajarro", "Doble Patada"):
+        escala_golpe = 4 if nombre in ("A Bocajarro", "Sumisión") else 3
+        sacudida = 14 if nombre == "A Bocajarro" else 11
+        return contacto(origen, destino, (), escala=escala_golpe, sacude=sacudida,
+                        extra=[Particula((189,), 4, 14, destino, destino, escala=escala_golpe, escala_fin=escala_golpe + 1)])
+
+    # ---------- HIELO ----------
+    if nombre in ("Viento Hielo", "Ventisca"):
+        rafaga = 12 if nombre == "Ventisca" else 6
+        escala_hielo = 4 if nombre == "Ventisca" else 3
+        sacudida = 14 if nombre == "Ventisca" else 8
+        elementos = [Particula((113, 160, 161, 162), k * 3, 24,
+                               (punto_salida[0], punto_salida[1] + random.randint(-50, 50)),
+                               (destino[0] + random.randint(-45, 45), destino[1] + random.randint(-35, 35)),
+                               escala=escala_hielo, giro_por_frame=18, alpha_fin=80)
+                     for k in range(rafaga)]
+        elementos.append(Flash(18, 12, (190, 235, 255), 120))
+        return {"elementos": elementos, "impacto": 18, "sacude": sacudida}
+
+    # ---------- DRAGÓN ----------
+    if nombre == "Garra Dragón":
+        return contacto(origen, destino, (), extra=[Tajo(destino, 6, color=(110, 130, 255), largo=190)], sacude=12)
+    if nombre == "Pulso Dragón":
+        return {"elementos": [Anillo(destino, k * 7, 30, 20, 195, (115, 130, 255), 11) for k in range(3)] +
+                              [Flash(8, 14, (130, 140, 255), 100)],
+                "impacto": 14, "sacude": 12}
 
     # ===== TEMA: Condicionales (Clase 4) + Listas (Clase 11) =====
     # if + return anticipado; lista por comprensión con for/range y random.randint
@@ -642,7 +691,10 @@ def construir(nombre, tipo, atacante):
     # ---------- RESPALDO POR TIPO ----------
     # Si la habilidad no tiene efecto propio se usa uno genérico según su tipo
     respaldo = {"Fuego": ((38, 39, 40), (43,)), "Agua": ((3, 2, 1), (7,)), "Planta": ((136, 137), (234,)),
-                "Eléctrico": ((101,), (205, 206)), "Tierra": ((238, 237), (233,)), "Psíquico": ((101,), (233,))}
+                "Eléctrico": ((101,), (205, 206)), "Tierra": ((238, 237), (233,)), "Psíquico": ((101,), (233,)),
+                "Hielo": ((160, 161), (113,)), "Dragón": ((101, 145), (233,)), "Lucha": ((189,), (233,)),
+                "Veneno": ((238, 237), (233,)), "Bicho": ((136, 137), (234,)), "Fantasma": ((101,), (233,)),
+                "Normal": ((145,), (233,))}
     ids_proyectil, ids_impacto = respaldo.get(tipo, ((145,), (233,)))
     return proyectil(punto_salida, destino, ids_proyectil, cantidad=3, escala=5, duracion=22, separacion_frames=5, spread=20, ids_impacto=ids_impacto)
 

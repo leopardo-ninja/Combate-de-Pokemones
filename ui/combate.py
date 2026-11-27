@@ -29,6 +29,47 @@ TEMAS_TIPO_COMBATE = {
 POS_POKEMON_IA = (1030, 160)        # Posicion Pokemon IA
 POS_POKEMON_JUG = (300, 350)        # Posicion Pokemon Jugador
 
+# ===== TEMA: Diccionarios (Clase 11) + Tuplas (Clase 11) =====
+# Diccionarios bando -> tupla. Se consultan así: PIES_POKEMON["ia"]
+# Ajuste automático del tamaño y la posición de los sprites (así los Pokémon grandes, como los legendarios, no se salen del círculo)
+TAM_CAJA_POKEMON = {"ia": (500, 500), "jugador": (680, 680)}        # Tamaño de la caja donde se dibuja cada Pokémon
+MAX_VISIBLE_POKEMON = {"ia": (420, 340), "jugador": (520, 470)}     # Tamaño máximo (ancho, alto) de la parte visible del Pokémon
+PIES_POKEMON = {"ia": (1310, 510), "jugador": (640, 840)}           # Punto del círculo (x, y) donde apoya los pies cada Pokémon
+sprites_ajustados = {}                                              # Memoria de sprites ya ajustados: (nombre, bando) -> imagen
+
+
+# ===== TEMA: Funciones (Clase 7) + Diccionarios (Clase 11) + Condicionales (Clase 4) =====
+# Entrada: nombre del Pokémon, bando ("ia" o "jugador") y su imagen. Salida (post-condición): una imagen del mismo tamaño de caja con el Pokémon reducido si era muy grande y con los pies sobre el círculo
+# Recorta el espacio transparente, reduce el sprite si pasa del máximo (nunca lo agranda) y lo apoya en PIES_POKEMON. El resultado se guarda para no repetir el cálculo en cada frame
+def ajustar_sprite(nombre, bando, imagen):
+    clave = (nombre, bando)
+    if clave in sprites_ajustados:
+        return sprites_ajustados[clave]
+
+    # get_bounding_rect() devuelve el rectángulo que ocupa la parte no transparente del sprite
+    visible = imagen.get_bounding_rect()
+    if visible.width == 0 or visible.height == 0:
+        sprites_ajustados[clave] = imagen
+        return imagen
+    recorte = imagen.subsurface(visible).copy()
+
+    # min() elige la reducción más fuerte necesaria; 1.0 significa que no se agranda
+    max_ancho, max_alto = MAX_VISIBLE_POKEMON[bando]
+    escala = min(1.0, max_ancho / visible.width, max_alto / visible.height)
+    if escala < 1.0:
+        nuevo_tam = (max(1, int(visible.width * escala)), max(1, int(visible.height * escala)))
+        recorte = pygame.transform.scale(recorte, nuevo_tam)    # scale (sin suavizar) conserva el estilo pixelado
+
+    # Se pone el recorte sobre un lienzo transparente del tamaño de la caja, con la base centrada en el punto de los pies
+    lienzo = pygame.Surface(TAM_CAJA_POKEMON[bando], pygame.SRCALPHA)
+    pos_caja = POS_POKEMON_IA if bando == "ia" else POS_POKEMON_JUG
+    pies_x = PIES_POKEMON[bando][0] - pos_caja[0]
+    pies_y = PIES_POKEMON[bando][1] - pos_caja[1]
+    lienzo.blit(recorte, recorte.get_rect(midbottom=(pies_x, pies_y)))
+    sprites_ajustados[clave] = lienzo
+    return lienzo
+
+
 # Opacidad del Pokémon en la fase transparente del parpadeo al recibir daño (0 = invisible, 255 = normal)
 ALFA_PARPADEO = 0
 
@@ -360,7 +401,11 @@ class EscenaCombate:
             return [("luchar", RECT_LUCHAR), ("cambiar", RECT_CAMBIAR)]
         # Submenús: una zona por habilidad o por Pokémon del equipo, más VOLVER (cada zona es (acción, rectángulo))
         if combate.sub_menu == "luchar":
-            zonas = [(("habilidad", i), rect_habilidad(i)) for i in range(len(combate.datos_jugador["habilidades"]))]
+            usables = combate.indices_usables("jugador")
+            zonas = []
+            for i in range (len(combate.datos_jugador["habilidades"])):
+                if not usables or i in usables:
+                    zonas.append((("habilidad", i), rect_habilidad(i)))
         elif combate.sub_menu == "cambiar":
             zonas = [(("pokemon", i), rect_pokemon(i)) for i in range(len(combate.equipo_jugador))]
         else:
@@ -384,8 +429,9 @@ class EscenaCombate:
         combate = self.combate
         self._revisar_entradas()
         tema = TEMAS_TIPO_COMBATE.get(combate.datos_jugador["tipo"], TEMAS_TIPO_COMBATE["Fuego"])
-        pokemon_ia = obtener_pokemon(combate.nombre_ia, "frente", (500, 500), (200, 50, 50))           #Pokemon rival tamano
-        pokemon_jugador = obtener_pokemon(combate.nombre_jugador, "espalda", (680, 680), (50, 100, 200))    #Pokemon aliado tamano
+        # Cada sprite se ajusta a su caja: los grandes se reducen y todos apoyan los pies en el círculo (ver ajustar_sprite)
+        pokemon_ia = ajustar_sprite(combate.nombre_ia, "ia", obtener_pokemon(combate.nombre_ia, "frente", TAM_CAJA_POKEMON["ia"], (200, 50, 50)))                   #Pokemon rival tamano
+        pokemon_jugador = ajustar_sprite(combate.nombre_jugador, "jugador", obtener_pokemon(combate.nombre_jugador, "espalda", TAM_CAJA_POKEMON["jugador"], (50, 100, 200)))    #Pokemon aliado tamano
 
         # Fondo y bases del escenario elegido
         pantalla.blit(obtener_fondo_escenario(self.escenario), (0, 0))
@@ -465,13 +511,18 @@ class EscenaCombate:
                 nombre_habilidad, potencia, tipo_habilidad = habilidad
                 rect_boton = rect_habilidad(idx)
                 caja = obtener_caja_ataque(tipo_habilidad)
+                sin_usos = idx not in combate.indices_usables("jugador")
+                if caja and sin_usos:
+                    caja = caja.copy()
+                    caja.fill((90, 90, 90), special_flags=pygame.BLEND_RGB_MULT)
+                    caja.fill((105, 105, 110), special_flags=pygame.BLEND_RGB_ADD)
                 if caja:
                     pantalla.blit(caja, rect_boton.topleft)
                 else:   # respaldo si falta la imagen
                     pygame.draw.rect(pantalla, tema["principal"], rect_boton, border_radius=12)
                     pygame.draw.rect(pantalla, NEGRO, rect_boton, 3, border_radius=12)
                 # Nombre del ataque en la mitad de arriba de la caja
-                texto_habilidad = FUENTE_HABILIDAD .render(nombre_habilidad, True, NEGRO)
+                texto_habilidad = FUENTE_HABILIDAD .render(nombre_habilidad, True,(95, 95, 100) if sin_usos else NEGRO)
                 max_ancho = int(100 * ESCALA_ATAQUE)
                 if texto_habilidad.get_width() > max_ancho:   # si no cabe, se reduce
                     texto_habilidad = pygame.transform.smoothscale(texto_habilidad, (max_ancho, int(texto_habilidad.get_height() * max_ancho / texto_habilidad.get_width())))
