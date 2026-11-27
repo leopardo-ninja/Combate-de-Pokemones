@@ -30,6 +30,9 @@ TAM_ATAQUE = (int(124 * ESCALA_ATAQUE), int(55 * ESCALA_ATAQUE))
 ESCALA_EQUIPO = 2.4                    # Tamaño de las cajas
 TAM_EQUIPO = (int(78 * ESCALA_EQUIPO), int(49 * ESCALA_EQUIPO))
 
+# Bolas del equipo en el HUD (3 por lado): cuánto se agrandan los sprites (pixel art)
+ESCALA_BOLAS_EQUIPO = 2
+
 # Tipo del ataque -> archivo de la caja
 CAJA_POR_TIPO = {"Normal": "normal", "Fuego": "fire", "Agua": "water", "Planta": "grass",
                  "Eléctrico": "electric", "Tierra": "ground", "Psíquico": "psychic", "Estado": "unknown"}
@@ -44,6 +47,7 @@ _CACHE_VISTA_PREVIA = {}
 _CACHE_BARRA_MSJ = {}
 _CACHE_ATAQUES = {}
 _CACHE_EQUIPO = {}
+_CACHE_BOLAS_EQUIPO = {}
 
 
 def obtener_pokemon(nombre, vista, tamaño, color_respaldo=None):
@@ -205,6 +209,24 @@ def obtener_caja_ataque(tipo):
         else:
             _CACHE_ATAQUES[clave] = None
     return _CACHE_ATAQUES[clave]
+
+
+# Bolas del indicador de equipo ("jugador" o "rival"). Lee assets/ui/bolas_<lado>.png: una tira con 3 cuadros
+# iguales (vivo, caído en grises, vacío) y devuelve {"vivo": imagen, "caido": imagen, "vacio": imagen} ya agrandadas
+def obtener_bolas_equipo(lado):
+    if lado not in _CACHE_BOLAS_EQUIPO:
+        ruta = f"assets/ui/bolas_{lado}.png"
+        if os.path.exists(ruta):
+            tira = pygame.image.load(ruta).convert_alpha()
+            tam = tira.get_height()                                 # cada cuadro es cuadrado
+            tam_final = (tam * ESCALA_BOLAS_EQUIPO, tam * ESCALA_BOLAS_EQUIPO)
+            _CACHE_BOLAS_EQUIPO[lado] = {}
+            for i, estado in enumerate(("vivo", "caido", "vacio")):
+                cuadro = tira.subsurface((i * tam, 0, tam, tam))
+                _CACHE_BOLAS_EQUIPO[lado][estado] = pygame.transform.scale(cuadro, tam_final)
+        else:
+            _CACHE_BOLAS_EQUIPO[lado] = None
+    return _CACHE_BOLAS_EQUIPO[lado]
 
 
 def obtener_caja_equipo(seleccionada, apagada=False):

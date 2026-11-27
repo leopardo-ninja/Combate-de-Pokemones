@@ -12,7 +12,7 @@ from motor_combate import ENERGIA_MAX, COSTO_FUERTE
 from .utilidades import pos_virtual, dibujar_resalte, separar_texto_en_lineas
 from .recursos import (
     obtener_pokemon, obtener_caja, obtener_fondo_escenario, dibujar_bases, obtener_barra_mensaje,
-    obtener_caja_ataque, obtener_caja_equipo, ESCALA_CAJA, ESCALA_ATAQUE, ESCALA_EQUIPO,
+    obtener_caja_ataque, obtener_caja_equipo, obtener_bolas_equipo, ESCALA_CAJA, ESCALA_ATAQUE, ESCALA_EQUIPO,
     TAM_ATAQUE, TAM_EQUIPO, BARRA_MSJ_RECT,
 )
 
@@ -28,6 +28,15 @@ TEMAS_TIPO_COMBATE = {
 # Posiciones del combate (coordenadas virtuales 1920x1080)
 POS_POKEMON_IA = (1030, 160)        # Posicion Pokemon IA
 POS_POKEMON_JUG = (300, 350)        # Posicion Pokemon Jugador
+
+# Opacidad del Pokémon en la fase transparente del parpadeo al recibir daño (0 = invisible, 255 = normal)
+ALFA_PARPADEO = 0
+
+# Las 3 bolas del equipo (vivo / caído / vacío), sin fondo. Las del jugador van bajo su caja de vida, pegadas a la derecha;
+# las del rival, bajo la suya, pegadas a la izquierda. Se da una esquina de la fila de bolas (x, y)
+POS_BANDEJA = {"jugador": (1555, 790), "ia": (629, 210)}
+ANCLA_BANDEJA = {"jugador": "topright", "ia": "topleft"}
+SEP_BOLAS = 6                                   # espacio entre bolas
 
 # Cajas de vida (Jugador y Rival)
 BARRA_CAJA = {"rival": (93, 40, 211, 48), "jugador": (117, 39, 233, 48)}        # Barra de vida
@@ -114,16 +123,44 @@ class EscenaCombate:
                     sonido.efecto("efectos/hit_normal_damage")              # Efecto sonido golpe normal
         self.combate.eventos.clear()
 
-    # Dibuja un Pokémon; si acaba de recibir daño parpadea, alternando con una copia blanca cada 4 frames
+    # Dibuja un Pokémon; si acaba de recibir daño parpadea, alternando cada 4 frames entre verse normal y volverse transparente
     def _dibujar_pokemon(self, pantalla, imagen_pokemon, pos, quien):
         if self.flash[quien] > 0:
             self.flash[quien] -= 1
             if (self.flash[quien] // 4) % 2 == 0:
-                destello = imagen_pokemon.copy()
-                destello.fill((255, 255, 255, 180), special_flags=pygame.BLEND_RGBA_ADD)
-                pantalla.blit(destello, pos)
+                # Fase transparente del parpadeo: ALFA_PARPADEO = 0 lo oculta del todo; con un valor mayor (ej. 80) queda semitransparente
+                if ALFA_PARPADEO > 0:
+                    transparente = imagen_pokemon.copy()
+                    transparente.set_alpha(ALFA_PARPADEO)
+                    pantalla.blit(transparente, pos)
                 return
         pantalla.blit(imagen_pokemon, pos)
+
+    # Estado de la bola número i del equipo de un bando: "vivo", "caido" (sin vida) o "vacio" (el equipo tiene menos de 3)
+    def _estado_bola(self, bando, i):
+        c = self.combate
+        equipo = c.equipo_jugador if bando == "jugador" else c.equipo_ia
+        if i >= len(equipo):
+            return "vacio"
+        nombre = equipo[i]
+        # La vida del Pokémon que combate está en hp_actual_*; la de los demás, en el diccionario del equipo
+        if bando == "jugador":
+            hp = c.hp_actual_jugador if nombre == c.nombre_jugador else c.hp_jugador[nombre]
+        else:
+            hp = c.hp_actual_ia if nombre == c.nombre_ia else c.hp_ia[nombre]
+        return "vivo" if hp > 0 else "caido"
+
+    # Dibuja las 3 bolas de un bando ("jugador" o "ia"), una al lado de otra y sin fondo
+    def _dibujar_bandeja_equipo(self, pantalla, bando):
+        bolas = obtener_bolas_equipo("jugador" if bando == "jugador" else "rival")
+        if bolas is None:
+            return
+        lado = bolas["vivo"].get_width()
+        # Rectángulo que ocupan las 3 bolas, colocado según la esquina elegida
+        rect = pygame.Rect(0, 0, 3 * lado + 2 * SEP_BOLAS, lado)
+        setattr(rect, ANCLA_BANDEJA[bando], POS_BANDEJA[bando])
+        for i in range(3):
+            pantalla.blit(bolas[self._estado_bola(bando, i)], (rect.x + i * (lado + SEP_BOLAS), rect.y))
 
     # Si el Pokémon activo cambió (inicio del combate, relevo o uno debilitado), el nuevo entra lanzado desde una Poké Ball
     def _revisar_entradas(self):
@@ -370,8 +407,10 @@ class EscenaCombate:
 
         # Cajas de vida: la del rival sin números y la del jugador con ellos
         if self._caja_visible("ia"):
+            self._dibujar_bandeja_equipo(pantalla, "ia")
             self._dibujar_caja_vida(pantalla, "rival", combate.nombre_ia, combate.hp_actual_ia, combate.hp_max_ia, False)
         if self._caja_visible("jugador"):
+            self._dibujar_bandeja_equipo(pantalla, "jugador")
             self._dibujar_caja_vida(pantalla, "jugador", combate.nombre_jugador, combate.hp_actual_jugador, combate.hp_max_jugador, True)
 
         eligiendo_ataque = combate.turno == "jugador" and combate.sub_menu == "luchar"
