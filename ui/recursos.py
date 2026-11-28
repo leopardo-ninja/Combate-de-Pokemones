@@ -31,7 +31,7 @@ ESCALA_EQUIPO = 2.4                    # Tamaño de las cajas
 TAM_EQUIPO = (int(78 * ESCALA_EQUIPO), int(49 * ESCALA_EQUIPO))
 
 # Bolas del equipo en el HUD (3 por lado): cuánto se agrandan los sprites (pixel art)
-ESCALA_BOLAS_EQUIPO = 2
+ESCALA_BOLAS_EQUIPO = {"jugador": 1.3, "rival": 1}
 
 # Tipo del ataque -> archivo de la caja
 CAJA_POR_TIPO = {"Normal": "normal", "Fuego": "fire", "Agua": "water", "Planta": "grass",
@@ -215,11 +215,12 @@ def obtener_caja_ataque(tipo):
 # iguales (vivo, caído en grises, vacío) y devuelve {"vivo": imagen, "caido": imagen, "vacio": imagen} ya agrandadas
 def obtener_bolas_equipo(lado):
     if lado not in _CACHE_BOLAS_EQUIPO:
-        ruta = f"assets/ui/bolas_{lado}.png"
+        ruta = f"assets/ui/bolas_jugador.png"
         if os.path.exists(ruta):
             tira = pygame.image.load(ruta).convert_alpha()
-            tam = tira.get_height()                                 # cada cuadro es cuadrado
-            tam_final = (tam * ESCALA_BOLAS_EQUIPO, tam * ESCALA_BOLAS_EQUIPO)
+            tam = tira.get_height()
+            esc = ESCALA_BOLAS_EQUIPO[lado]                                 # cada cuadro es cuadrado
+            tam_final = (tam * esc, tam * esc)
             _CACHE_BOLAS_EQUIPO[lado] = {}
             for i, estado in enumerate(("vivo", "caido", "vacio")):
                 cuadro = tira.subsurface((i * tam, 0, tam, tam))

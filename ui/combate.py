@@ -31,42 +31,52 @@ POS_POKEMON_JUG = (300, 350)        # Posicion Pokemon Jugador
 
 # ===== TEMA: Diccionarios (Clase 11) + Tuplas (Clase 11) =====
 # Diccionarios bando -> tupla. Se consultan así: PIES_POKEMON["ia"]
+# ===== AJUSTE DEL TAMAÑO DE LOS POKÉMON (lo único que normalmente tendrás que tocar) =====
+# Tamaño de cada bando en porcentaje: 100 = normal, 90 = 10 % más pequeño, 110 = 10 % más grande
+TAMANO_POKEMON_PORCENTAJE = {"ia": 81, "jugador": 100}
+# Ajuste extra para Pokémon concretos (se multiplica por el de su bando). Se escribe el nombre en minúsculas y su porcentaje
+# Ejemplo: AJUSTE_POKEMON = {"moltres": 90, "caterpie": 120}
+AJUSTE_POKEMON = {}
+
 # Ajuste automático del tamaño y la posición de los sprites (así los Pokémon grandes, como los legendarios, no se salen del círculo)
-TAM_CAJA_POKEMON = {"ia": (500, 500), "jugador": (680, 680)}        # Tamaño de la caja donde se dibuja cada Pokémon
-MAX_VISIBLE_POKEMON = {"ia": (420, 340), "jugador": (520, 470)}     # Tamaño máximo (ancho, alto) de la parte visible del Pokémon
+TAM_LIENZO_POKEMON = {"ia": (500, 500), "jugador": (680, 680)}        # Tamaño de la caja donde se dibuja cada Pokémon (no cambia cuánto se ve)
+TAM_MAX_POKEMON = {"ia": (336, 272), "jugador": (416, 376)}     # Tope de seguridad (ancho, alto): solo reduce los que se pasan, casi nunca hay que tocarlo
 PIES_POKEMON = {"ia": (1310, 510), "jugador": (640, 840)}           # Punto del círculo (x, y) donde apoya los pies cada Pokémon
-sprites_ajustados = {}                                              # Memoria de sprites ya ajustados: (nombre, bando) -> imagen
+pokemons_ajustados = {}                                              # Memoria de sprites ya ajustados: (nombre, bando) -> imagen
 
 
 # ===== TEMA: Funciones (Clase 7) + Diccionarios (Clase 11) + Condicionales (Clase 4) =====
 # Entrada: nombre del Pokémon, bando ("ia" o "jugador") y su imagen. Salida (post-condición): una imagen del mismo tamaño de caja con el Pokémon reducido si era muy grande y con los pies sobre el círculo
 # Recorta el espacio transparente, reduce el sprite si pasa del máximo (nunca lo agranda) y lo apoya en PIES_POKEMON. El resultado se guarda para no repetir el cálculo en cada frame
-def ajustar_sprite(nombre, bando, imagen):
+def ajustar_tamano_pokemon(nombre, bando, imagen):
     clave = (nombre, bando)
-    if clave in sprites_ajustados:
-        return sprites_ajustados[clave]
+    if clave in pokemons_ajustados:
+        return pokemons_ajustados[clave]
 
     # get_bounding_rect() devuelve el rectángulo que ocupa la parte no transparente del sprite
-    visible = imagen.get_bounding_rect()
-    if visible.width == 0 or visible.height == 0:
-        sprites_ajustados[clave] = imagen
+    zona_visible = imagen.get_bounding_rect()
+    if zona_visible.width == 0 or zona_visible.height == 0:
+        pokemons_ajustados[clave] = imagen
         return imagen
-    recorte = imagen.subsurface(visible).copy()
+    recorte = imagen.subsurface(zona_visible).copy()
 
-    # min() elige la reducción más fuerte necesaria; 1.0 significa que no se agranda
-    max_ancho, max_alto = MAX_VISIBLE_POKEMON[bando]
-    escala = min(1.0, max_ancho / visible.width, max_alto / visible.height)
-    if escala < 1.0:
-        nuevo_tam = (max(1, int(visible.width * escala)), max(1, int(visible.height * escala)))
+    # min() elige la reducción más fuerte necesaria del tope de seguridad; 1.0 significa que ese tope no agranda
+    max_ancho, max_alto = TAM_MAX_POKEMON[bando]
+    escala = min(1.0, max_ancho / zona_visible.width, max_alto / zona_visible.height)
+    # Después se aplica el porcentaje del bando y el de ese Pokémon en concreto (100 = sin cambio)
+    porcentaje = TAMANO_POKEMON_PORCENTAJE[bando] * AJUSTE_POKEMON.get(nombre, 100) / 100
+    escala = escala * porcentaje / 100
+    if escala != 1.0:
+        nuevo_tam = (max(1, int(zona_visible.width * escala)), max(1, int(zona_visible.height * escala)))
         recorte = pygame.transform.scale(recorte, nuevo_tam)    # scale (sin suavizar) conserva el estilo pixelado
 
     # Se pone el recorte sobre un lienzo transparente del tamaño de la caja, con la base centrada en el punto de los pies
-    lienzo = pygame.Surface(TAM_CAJA_POKEMON[bando], pygame.SRCALPHA)
+    lienzo = pygame.Surface(TAM_LIENZO_POKEMON[bando], pygame.SRCALPHA)
     pos_caja = POS_POKEMON_IA if bando == "ia" else POS_POKEMON_JUG
     pies_x = PIES_POKEMON[bando][0] - pos_caja[0]
     pies_y = PIES_POKEMON[bando][1] - pos_caja[1]
     lienzo.blit(recorte, recorte.get_rect(midbottom=(pies_x, pies_y)))
-    sprites_ajustados[clave] = lienzo
+    pokemons_ajustados[clave] = lienzo
     return lienzo
 
 
@@ -429,9 +439,9 @@ class EscenaCombate:
         combate = self.combate
         self._revisar_entradas()
         tema = TEMAS_TIPO_COMBATE.get(combate.datos_jugador["tipo"], TEMAS_TIPO_COMBATE["Fuego"])
-        # Cada sprite se ajusta a su caja: los grandes se reducen y todos apoyan los pies en el círculo (ver ajustar_sprite)
-        pokemon_ia = ajustar_sprite(combate.nombre_ia, "ia", obtener_pokemon(combate.nombre_ia, "frente", TAM_CAJA_POKEMON["ia"], (200, 50, 50)))                   #Pokemon rival tamano
-        pokemon_jugador = ajustar_sprite(combate.nombre_jugador, "jugador", obtener_pokemon(combate.nombre_jugador, "espalda", TAM_CAJA_POKEMON["jugador"], (50, 100, 200)))    #Pokemon aliado tamano
+        # Cada sprite se ajusta a su caja: los grandes se reducen y todos apoyan los pies en el círculo (ver ajustar_tamano_pokemon)
+        pokemon_ia = ajustar_tamano_pokemon(combate.nombre_ia, "ia", obtener_pokemon(combate.nombre_ia, "frente", TAM_LIENZO_POKEMON["ia"], (200, 50, 50)))                   #Pokemon rival tamano
+        pokemon_jugador = ajustar_tamano_pokemon(combate.nombre_jugador, "jugador", obtener_pokemon(combate.nombre_jugador, "espalda", TAM_LIENZO_POKEMON["jugador"], (50, 100, 200)))    #Pokemon aliado tamano
 
         # Fondo y bases del escenario elegido
         pantalla.blit(obtener_fondo_escenario(self.escenario), (0, 0))

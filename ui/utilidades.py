@@ -22,6 +22,20 @@ def dibujar_resalte(pantalla, rect, radio=12):
     pygame.draw.rect(pantalla, COLOR_RESALTE, rect.inflate(4, 4), 4, border_radius=radio)
 
 
+# Relleno del botón resaltado (el botón resaltado se aclara y su borde se engrosa)
+COLOR_BOTON_RESALTADO = (35, 68, 130)
+
+
+# Dibuja un botón del menú; si está resaltado (flechas o mouse encima) se aclara y engrosa el borde
+# Se usa en el menú principal y en la pausa del combate
+def dibujar_boton_menu(pantalla, boton, resaltado):
+    pygame.draw.rect(pantalla, COLOR_BOTON_RESALTADO if resaltado else AZUL_OSCURO, boton.rect, border_radius=12)
+    pygame.draw.rect(pantalla, BLANCO, boton.rect, 4 if resaltado else 2, border_radius=12)
+    fuente = getattr(boton, "fuente", FUENTE)
+    txt = fuente.render(boton.texto, True, BLANCO)
+    pantalla.blit(txt, txt.get_rect(center=boton.rect.center))
+
+
 # Parte un texto largo en líneas que quepan en max_ancho píxeles (para mensajes y descripciones)
 def separar_texto_en_lineas(texto, fuente, max_ancho):
     # Se arma cada línea palabra por palabra

@@ -10,6 +10,11 @@ from config import (
     ANCHO_VIRTUAL, ALTO_VIRTUAL, ANCHO_REAL, ALTO_REAL, MODO_VENTANA, AZUL_OSCURO,
 )
 from motor_combate import Combate
+from ui.utilidades import Boton, dibujar_boton_menu
+
+
+# Acción de cada botón de la pausa, en el mismo orden en que se dibujan (Continuar arriba, Salir abajo)
+ACCIONES_PAUSA = ["continuar", "menu"]
 
 
 # ===== TEMA: Funciones (Clase 7) =====
@@ -123,6 +128,15 @@ def main():
     combate = None
     escena_combate = None
     retraso_ia = 0
+    # pausa: True cuando el combate está en pausa (ESC); fondo_pausa guarda la captura oscurecida del combate
+    pausa = False
+    fondo_pausa = None
+    # Botones de la pausa: mismo tamaño y separación que los del menú principal (250 x 70, separados 90), centrados en la pantalla
+    botones_pausa = [
+        Boton(ANCHO_VIRTUAL // 2 - 125, ALTO_VIRTUAL // 2 - 80, 250, 70, "Continuar"),
+        Boton(ANCHO_VIRTUAL // 2 - 125, ALTO_VIRTUAL // 2 + 10, 250, 70, "Salir"),
+    ]
+    seleccion_pausa = 0     # Botón resaltado de la pausa (0 = Continuar, 1 = Salir)
 
     # Botones del menú principal (se definen en ui/menu.py)
     botones_menu = ui.crear_botones_menu()
@@ -231,12 +245,23 @@ def main():
 
             # --- Mouse en el combate ---
             elif evento.type == pygame.MOUSEMOTION and estado_app == "combate":
-                escena_combate.seleccionar_en(evento.pos)
+                if pausa:
+                    for i, boton in enumerate(botones_pausa):
+                        if boton.contiene(evento.pos):
+                            seleccion_pausa = i
+                else:
+                    escena_combate.seleccionar_en(evento.pos)
 
             elif evento.type == pygame.MOUSEBUTTONDOWN and estado_app == "combate":
-                if evento.button == 1:
+                if pausa:
+                    # En pausa solo funcionan los botones de la pausa (clic izquierdo)
+                    if evento.button == 1:
+                        for i, boton in enumerate(botones_pausa):
+                            if boton.contiene(evento.pos):
+                                accion_combate = ACCIONES_PAUSA[i]
+                elif evento.button == 1:
                     accion_combate = escena_combate.accion_en(evento.pos)
-                elif evento.button == 3:  # clic derecho = volver (como ESC)
+                elif evento.button == 3:  # clic derecho = volver al menú anterior del combate
                     accion_combate = "volver"
 
             # --- Teclado ---
@@ -289,7 +314,21 @@ def main():
                         estado_app = "seleccion"
 
                 elif estado_app == "combate":
-                    accion_combate = tecla_a_accion(evento.key, escena_combate)
+                    # ESC abre o cierra la pausa
+                    if evento.key == pygame.K_ESCAPE:
+                        pausa = not pausa
+                        fondo_pausa = None
+                        seleccion_pausa = 0
+                    # En pausa, las flechas mueven el botón resaltado y ENTER lo pulsa
+                    elif pausa:
+                        if evento.key == pygame.K_DOWN:
+                            seleccion_pausa = (seleccion_pausa + 1) % len(botones_pausa)
+                        elif evento.key == pygame.K_UP:
+                            seleccion_pausa = (seleccion_pausa - 1) % len(botones_pausa)
+                        elif evento.key == pygame.K_RETURN:
+                            accion_combate = ACCIONES_PAUSA[seleccion_pausa]
+                    else:
+                        accion_combate = tecla_a_accion(evento.key, escena_combate)
 
                 elif estado_app == "pokedex":
                     if evento.key == pygame.K_ESCAPE:
@@ -305,6 +344,13 @@ def main():
                     sonido_seleccion()
                     estado_app = "menu_principal"
                     seleccion_idx = 0
+                    pausa = False
+                    fondo_pausa = None
+                # CONTINUAR: cierra la pausa y el combate sigue donde estaba
+                elif accion_combate == "continuar":
+                    sonido_seleccion()
+                    pausa = False
+                    fondo_pausa = None
                 else:
                     aplicar_accion(accion_combate, combate, modo_juego, escena_combate)
 
@@ -317,6 +363,8 @@ def main():
             combate = Combate(equipo_seleccionado, modo_juego)
             escena_combate = ui.EscenaCombate(combate, escenario_sel)
             estado_app = "combate"
+            pausa = False
+            fondo_pausa = None
 
         # ===== TEMA: Condicionales (Clase 4) =====
         # if/elif según el botón elegido
@@ -356,20 +404,32 @@ def main():
             ui.dibujar_estadisticas(pantalla, equipo_seleccionado)
 
         elif estado_app == "combate":
-            # ===== TEMA: Condicionales (Clase 4) + Listas (Clase 11) =====
-            # Contador de frames; random.choice sobre la lista de habilidades (tuplas)
-            # Turno del rival: espera 60 frames (1 segundo) y lanza una habilidad al azar con su animación
-            if combate.turno == "ia" and not escena_combate.ocupado():
-                retraso_ia += 1
-                if retraso_ia > 60:
-                    # ===== TEMA: Funciones (Clase 7) + Listas (Clase 11) =====
-                    # El motor elige al azar solo entre las habilidades con PP (antes se elegía de toda la lista con random.choice)
-                    habilidad_ia = combate.elegir_habilidad_ia()
-                    escena_combate.lanzar_habilidad(
-                        "ia", habilidad_ia, lambda elegida=habilidad_ia: combate.turno_ia(elegida),
-                        f"¡{combate.nombre_ia.capitalize()} rival usó {habilidad_ia[0]}!")
-                    retraso_ia = 0
-            escena_combate.dibujar(pantalla)
+            if pausa:
+                # Primer frame de la pausa: se guarda una captura del combate y se oscurece (la capa negra es semitransparente)
+                if fondo_pausa is None:
+                    escena_combate.dibujar(pantalla)
+                    fondo_pausa = pantalla.copy()
+                    capa_oscura = pygame.Surface((ANCHO_VIRTUAL, ALTO_VIRTUAL))
+                    capa_oscura.set_alpha(160)
+                    fondo_pausa.blit(capa_oscura, (0, 0))
+                pantalla.blit(fondo_pausa, (0, 0))
+                for i, boton in enumerate(botones_pausa):
+                    dibujar_boton_menu(pantalla, boton, i == seleccion_pausa)
+            else:
+                # ===== TEMA: Condicionales (Clase 4) + Listas (Clase 11) =====
+                # Contador de frames; random.choice sobre la lista de habilidades (tuplas)
+                # Turno del rival: espera 60 frames (1 segundo) y lanza una habilidad al azar con su animación
+                if combate.turno == "ia" and not escena_combate.ocupado():
+                    retraso_ia += 1
+                    if retraso_ia > 60:
+                        # ===== TEMA: Funciones (Clase 7) + Listas (Clase 11) =====
+                        # El motor elige al azar solo entre las habilidades con PP (antes se elegía de toda la lista con random.choice)
+                        habilidad_ia = combate.elegir_habilidad_ia()
+                        escena_combate.lanzar_habilidad(
+                            "ia", habilidad_ia, lambda elegida=habilidad_ia: combate.turno_ia(elegida),
+                            f"¡{combate.nombre_ia.capitalize()} rival usó {habilidad_ia[0]}!")
+                        retraso_ia = 0
+                escena_combate.dibujar(pantalla)
 
         elif estado_app == "pokedex":
             escena_pokedex.dibujar(pantalla)

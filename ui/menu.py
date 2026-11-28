@@ -3,9 +3,9 @@ import os
 import pygame
 
 from config import (
-    ANCHO_VIRTUAL, ALTO_VIRTUAL, BLANCO, AZUL_OSCURO, FUENTE, FUENTE_CHICA, FUENTE_GRANDE
+    ANCHO_VIRTUAL, ALTO_VIRTUAL, BLANCO, FUENTE_CHICA, FUENTE_GRANDE
 )
-from .utilidades import Boton, dibujar_resalte
+from .utilidades import Boton, dibujar_boton_menu
 
 # Textos de los botones del menú, de arriba abajo
 TEXTOS_MENU = ["Combate", "Pokédex", "Salir"]
@@ -22,9 +22,6 @@ SEP_LOGO_X, SEP_LOGO_Y = 220, 170
 
 # Botones: x, y del primero, ancho, alto y separación entre ellos
 BOTON_X, BOTON_Y0, BOTON_ANCHO, BOTON_ALTO, BOTON_SEP = 835, 540, 250, 70, 90
-
-# Relleno del botón resaltado (igual que la Pokédex: la celda resaltada se aclara y su borde se engrosa)
-COLOR_BOTON_RESALTADO = (35, 68, 130)
 
 # Caché: el fondo y el logo se preparan una sola vez (no en cada frame)
 _CACHE_MENU = {}
@@ -69,17 +66,6 @@ def _obtener_logo():
     return _CACHE_MENU["logo"]
 
 
-# Dibuja un botón del menú; si está resaltado (flechas o mouse encima) se aclara, engrosa el borde y lleva el resalte doble
-def _dibujar_boton_menu(pantalla, boton, resaltado):
-    pygame.draw.rect(pantalla, COLOR_BOTON_RESALTADO if resaltado else AZUL_OSCURO, boton.rect, border_radius=12)
-    pygame.draw.rect(pantalla, BLANCO, boton.rect, 4 if resaltado else 2, border_radius=12)
-    if resaltado:
-        dibujar_resalte(pantalla, boton.rect)
-    fuente = getattr(boton, "fuente", FUENTE)
-    txt = fuente.render(boton.texto, True, BLANCO)
-    pantalla.blit(txt, txt.get_rect(center=boton.rect.center))
-
-
 # ----------------- PANTALLAS -----------------
 # Dibuja el menú principal: fondo, logo y botones (el seleccionado lleva resalte)
 def dibujar_menu_principal(pantalla, botones, seleccion_idx):
@@ -96,4 +82,4 @@ def dibujar_menu_principal(pantalla, botones, seleccion_idx):
         pantalla.blit(titulo, titulo.get_rect(midtop=(ANCHO_VIRTUAL // 2, Y_LOGO + 120)))
 
     for idx, boton in enumerate(botones):
-        _dibujar_boton_menu(pantalla, boton, idx == seleccion_idx)
+        dibujar_boton_menu(pantalla, boton, idx == seleccion_idx)
